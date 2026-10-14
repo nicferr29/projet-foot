@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prédiction de match · commentaires</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="donnees.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --txt:#161b26; --muted:#667085; --line:#e4e7ec;
+    --dom:#2563eb; --ext:#ea580c; --nul:#7c8493; --glob:#0f766e; --vol:#cdd3dd; --vol-rec:#8b95a7; --accent:#111827;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1116; --card:#171b23; --txt:#e6e9ef; --muted:#9aa3b2; --line:#2a303c;
+      --dom:#60a5fa; --ext:#fb923c; --nul:#9aa3b2; --glob:#2dd4bf; --vol:#3a4150; --vol-rec:#6b7486; --accent:#f9fafb;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1116; --card:#171b23; --txt:#e6e9ef; --muted:#9aa3b2; --line:#2a303c;
+    --dom:#60a5fa; --ext:#fb923c; --nul:#9aa3b2; --glob:#2dd4bf; --vol:#3a4150; --vol-rec:#6b7486; --accent:#f9fafb;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{max-width:1150px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:16px;margin:0 0 10px}
+  .sub{color:var(--muted);margin:0 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .section{margin-top:12px}
+  .controls{display:grid;grid-template-columns:1fr 2fr;gap:12px 16px;align-items:end}
+  label.small{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+  select{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font:inherit}
+  .row-x{grid-column:1 / -1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  input[type=range]{flex:1;min-width:200px;accent-color:var(--accent)}
+  .x-val{font-weight:700;font-size:18px;min-width:60px;text-align:right}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:16px 0}
+  .kpi h3{margin:0 0 8px;font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .big{font-size:22px;font-weight:700;line-height:1.2}
+  .duo{display:flex;gap:18px}
+  .duo > div{flex:1}
+  .bar{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0 6px;background:var(--line)}
+  .bar span{display:block;height:100%}
+  .legend-small{font-size:13px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:800px){.grid{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
+  .chart-box{position:relative;height:300px}
+  .grid > *, .kpis > *, .controls > *{min-width:0}
+  @media (max-width:500px){.kpis{grid-template-columns:1fr}.duo{gap:10px}}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child,th:nth-child(3),td:nth-child(3){text-align:left}
+  th{color:var(--muted);font-weight:600}
+  .wrap-table{overflow-x:auto}
+  .ok{color:#15803d;font-weight:700}
+  .ko{color:#b91c1c;font-weight:700}
+  .note{font-size:13px;color:var(--muted)}
+  .reveal{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px dashed var(--line)}
+  .check{display:flex;gap:8px;align-items:center;font-size:15px}
+  .warn{padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line)}
+  .ind div{margin-bottom:3px;font-size:14px}
+  .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Prédire un match à partir des commentaires</h1>
+  <p class="sub">Score actuel estimé, dynamique des commentaires et pronostic du résultat final à partir des X premières minutes. Données : SoccerNet-Echoes.</p>
+
+  <section class="card controls">
+    <div>
+      <label class="small" for="comp">Compétition</label>
+      <select id="comp"></select>
+    </div>
+    <div>
+      <label class="small" for="match">Match</label>
+      <select id="match"></select>
+    </div>
+    <div class="row-x">
+      <label class="small" for="x" style="margin:0">Minutes analysées</label>
+      <input id="x" type="range" min="0" step="1" value="2">
+      <span class="x-val" id="xval">30′</span>
+    </div>
+  </section>
+
+  <section class="kpis">
+    <div class="card kpi">
+      <h3>Score · <span class="xv">30′</span></h3>
+      <div class="duo">
+        <div><div class="note">Actuel estimé</div><div class="big" id="etat">—</div></div>
+        <div><div class="note">Pronostic final</div><div class="big" id="score">—</div></div>
+      </div>
+      <div class="note" id="scorenote" style="margin-top:6px"></div>
+    </div>
+    <div class="card kpi">
+      <h3>Favori pour le résultat final</h3>
+      <div class="big" id="fav">—</div>
+      <div class="bar" id="probbar"></div>
+      <div class="legend-small" id="problegend"></div>
+    </div>
+    <div class="card kpi">
+      <h3>Dynamique des commentaires</h3>
+      <div class="ind" id="dyn"></div>
+    </div>
+    <div class="card kpi">
+      <h3>Indices repérés</h3>
+      <div class="ind" id="indices"></div>
+    </div>
+    <div class="card kpi">
+      <h3>Avant-match (Elo)</h3>
+      <div class="ind" id="elo"></div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Sentiment des commentaires</h2>
+      <div class="chart-box"><canvas id="cSent"></canvas></div>
+      <p class="note">Score de −1 (négatif) à +1 (positif), moyenne par tranche de 5′. Barres : nombre de commentaires, plus foncées sur la dernière tranche de 10′.</p>
+    </div>
+    <div class="card">
+      <h2>Prédiction toutes les 10′</h2>
+      <div class="chart-box"><canvas id="cPred"></canvas></div>
+      <p class="note">Probabilité de chaque résultat final, hors-échantillon. Survolez un point pour voir le score actuel et le pronostic.</p>
+    </div>
+  </section>
+
+  <section class="card section">
+    <h2>Détail par tranche de 10′</h2>
+    <div class="wrap-table"><table id="tab"></table></div>
+  </section>
+
+  <section class="card section">
+    <h2>Vérifier avec le résultat réel</h2>
+    <label class="check"><input type="checkbox" id="reveal"> Afficher le score final</label>
+    <div class="reveal" id="resultat" hidden></div>
+  </section>
+
+  <section class="card section">
+    <h2>Fiabilité du modèle</h2>
+    <div id="fiab" class="note"></div>
+  </section>
+
+  <p class="note section">
+    <strong>Méthode.</strong> Transcriptions Whisper traduites en anglais (meilleure version retenue par mi-temps), répétitions retirées,
+    minutes recalées sur le coup d'envoi. Le <strong>score actuel</strong> part de 0-0, ajoute chaque but détecté et attribué à une équipe,
+    et se recale quand les commentateurs citent un score (les scores historiques sont ignorés).
+    La <strong>dynamique</strong> compare le sentiment et la part des mentions sur toute la fenêtre et sur sa dernière tranche de 10′.
+    L'<strong>Elo</strong> mesure la force des équipes avec les seuls matchs antérieurs du dataset.
+    Le pronostic combine une régression logistique (texte + indicateurs) et un gradient boosting. Chaque match est prédit par un modèle
+    qui ne l'a pas vu (validation croisée). Les indices sont extraits automatiquement d'un texte bruité et peuvent être faux.
+  </p>
+</main>
+
+<script>
+const D = window.DONNEES;
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtPct = v => v == null || isNaN(v) ? '—' : Math.round(v * 100) + ' %';
+const fmtS = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2);
+const SEUIL_FAVORI = 0.40;
+let CPS = [], FIN = 120, TR = 10, chSent = null, chPred = null;
+const lbl = t => t >= FIN ? 'Fin' : t + '′';
+
+// Favori d'après les probabilités [dom, nul, ext] : null si aucune issue ne dépasse le seuil
+function favori(p, m) {
+  const mx = Math.max(...p);
+  if (mx < SEUIL_FAVORI) return null;
+  if (mx === p[0]) return m.dom;
+  if (mx === p[2]) return m.ext;
+  return 'Nul';
+}
+
+// Tendance de la dernière tranche : mentions + sentiment, renvoie le nom d'équipe ou null
+function tendance(dyn, m) {
+  if (!dyn || dyn.ment_rec == null) return null;
+  const s = (dyn.sent_rec[0] ?? 0) - (dyn.sent_rec[1] ?? 0);
+  const t = (dyn.ment_rec - 0.5) * 2 + s * 2;
+  if (t > 0.15) return m.dom;
+  if (t < -0.15) return m.ext;
+  return null;
+}
+
+function init() {
+  if (!D) {
+    document.querySelector('main').insertAdjacentHTML('afterbegin',
+      '<p class="warn">Fichier donnees.js introuvable. Lance d\'abord exporter_donnees.py dans le dossier du projet.</p>');
+    return;
+  }
+  CPS = D.meta.checkpoints;
+  FIN = D.meta.fin_match || 120;
+  TR = D.meta.tranche_recente || 10;
+  const comps = [...new Set(D.matchs.map(m => m.competition))].sort();
+  $('comp').innerHTML = comps.map(c => `<option value="${esc(c)}">${esc(c.replace(/_/g, ' '))}</option>`).join('');
+  $('x').max = CPS.length - 1;
+  $('x').value = Math.max(0, CPS.indexOf(30));
+  $('comp').onchange = fillMatches;
+  $('match').onchange = render;
+  $('x').oninput = render;
+  $('reveal').onchange = render;
+  fillMatches();
+}
+
+function fillMatches() {
+  const comp = $('comp').value;
+  const liste = D.matchs.filter(m => m.competition === comp);
+  $('match').innerHTML = liste.map(m =>
+    `<option value="${esc(m.id)}">${esc(m.date)} · ${esc(m.dom)} – ${esc(m.ext)}</option>`).join('');
+  render();
+}
+
+function render() {
+  const m = D.matchs.find(x => x.id === $('match').value);
+  if (!m) return;
+  const X = CPS[+$('x').value];
+  $('xval').textContent = lbl(X);
+  document.querySelectorAll('.xv').forEach(e => e.textContent = lbl(X));
+  const pX = m.predictions[String(X)];
+
+  // ---- Tranches de sentiment de la fenêtre 0 → X (sans les tranches vides en fin de vidéo)
+  const s = m.sentiment;
+  const iBins = s.bins.map((b, i) => i).filter(i => s.bins[i] < X);
+  while (iBins.length && s.n[iBins[iBins.length - 1]] === 0) iBins.pop();
+  const finFenetre = X >= FIN ? (iBins.length ? s.bins[iBins[iBins.length - 1]] + D.meta.bin_min : 0) : X;
+  const debRec = Math.max(0, finFenetre - TR);
+  const nomFen = X >= FIN ? 'Tout le match' : `0–${X}′`;
+  const nomRec = X >= FIN ? `${TR} dernières min` : `${debRec}–${X}′`;
+
+  // ---- Score actuel et pronostic
+  if (!pX) {
+    ['etat', 'score', 'fav'].forEach(id => $(id).textContent = '—');
+    $('scorenote').textContent = 'Pas assez de commentaires à cette minute pour ce match.';
+    ['probbar', 'problegend', 'indices', 'dyn'].forEach(id => $(id).innerHTML = '');
+  } else {
+    $('etat').textContent = `${pX.etat[0]} – ${pX.etat[1]}`;
+    $('score').textContent = `${pX.score[0]} – ${pX.score[1]}`;
+    const conf = pX.etat_conf_age <= 5 ? 'confirmé par un score cité récemment'
+      : (pX.etat[0] + pX.etat[1] === 0 && pX.indices.buts[0] + pX.indices.buts[1] === 0 ? 'aucun but détecté depuis le coup d\'envoi'
+      : 'reconstruit à partir des buts détectés');
+    const na = pX.etat_non_attr ? ` · ${pX.etat_non_attr} but(s) détecté(s) sans équipe identifiée` : '';
+    $('scorenote').textContent = `Score actuel ${conf}${na}. Buts attendus en fin de match : ${pX.lambda[0].toFixed(1)} – ${pX.lambda[1].toFixed(1)}.`;
+
+    const [pd, pn, pe] = pX.p;
+    const fav = favori(pX.p, m);
+    $('fav').textContent = fav ? `${fav} (${fmtPct(Math.max(pd, pn, pe))})` : 'Pas de favori net';
+    $('probbar').innerHTML = [[pd, '--dom'], [pn, '--nul'], [pe, '--ext']]
+      .map(([p, c]) => `<span style="width:${p * 100}%;background:var(${c})"></span>`).join('');
+    $('problegend').innerHTML =
+      `<span><span class="dot" style="background:var(--dom)"></span>${esc(m.dom)} ${fmtPct(pd)}</span>` +
+      `<span><span class="dot" style="background:var(--nul)"></span>Nul ${fmtPct(pn)}</span>` +
+      `<span><span class="dot" style="background:var(--ext)"></span>${esc(m.ext)} ${fmtPct(pe)}</span>`;
+
+    const dy = pX.dyn;
+    const tend = tendance(dy, m);
+    $('dyn').innerHTML = `
+      <div><strong>${nomFen}</strong> : sentiment ${esc(m.dom)} ${fmtS(dy.sent[0])} · ${esc(m.ext)} ${fmtS(dy.sent[1])} · ${fmtPct(dy.ment)} des mentions pour ${esc(m.dom)}</div>
+      <div><strong>${nomRec}</strong> : sentiment ${esc(m.dom)} ${fmtS(dy.sent_rec[0])} · ${esc(m.ext)} ${fmtS(dy.sent_rec[1])} · ${fmtPct(dy.ment_rec)} des mentions pour ${esc(m.dom)}</div>
+      <div>Dernière tranche : <span class="tag">${tend ? 'plutôt en faveur de ' + esc(tend) : 'équilibrée'}</span></div>`;
+
+    const ind = pX.indices;
+    $('indices').innerHTML = `
+      <div>Buts détectés : <strong>${esc(m.dom)} ${ind.buts[0]}</strong> · <strong>${esc(m.ext)} ${ind.buts[1]}</strong></div>
+      <div>Dernier score cité : <strong>${ind.score_cite ? esc(ind.score_cite) : 'aucun'}</strong>${ind.score_cite_min != null ? ` <span class="note">(vers ${Math.round(ind.score_cite_min)}′)</span>` : ''}</div>
+      <div>Cartons rouges : ${ind.rouges[0]} – ${ind.rouges[1]}</div>
+      <div class="note">Extraits automatiquement, peuvent être bruités.</div>`;
+  }
+
+  // ---- Elo avant-match
+  const e = m.elo;
+  $('elo').innerHTML = e ? `
+    <div>${esc(m.dom)} <strong>${e.dom}</strong> · ${esc(m.ext)} <strong>${e.ext}</strong></div>
+    <div>Score attendu de ${esc(m.dom)} (avantage du terrain compris) : <strong>${fmtPct(e.attendu_dom)}</strong></div>
+    <div class="note">${e.nb_min < 3 ? 'Peu de matchs antérieurs pour ces équipes : estimation fragile.' : `Au moins ${e.nb_min} matchs antérieurs par équipe.`}</div>` : '—';
+
+  // ---- Graphique du sentiment
+  if (chSent) chSent.destroy();
+  chSent = new Chart($('cSent'), {
+    data: {
+      labels: iBins.map(i => `${s.bins[i]}–${s.bins[i] + D.meta.bin_min}′`),
+      datasets: [
+        { type: 'bar', label: 'Nb commentaires', yAxisID: 'y1', order: 3, data: iBins.map(i => s.n[i]),
+          backgroundColor: iBins.map(i => s.bins[i] >= debRec ? css('--vol-rec') : css('--vol')) },
+        { type: 'line', label: 'Global', yAxisID: 'y', order: 0, spanGaps: true,
+          data: iBins.map(i => s.global[i]), borderColor: css('--glob'), backgroundColor: css('--glob'), tension: .3 },
+        { type: 'line', label: m.dom, yAxisID: 'y', order: 1, spanGaps: true,
+          data: iBins.map(i => s.dom[i]), borderColor: css('--dom'), backgroundColor: css('--dom'), tension: .3 },
+        { type: 'line', label: m.ext, yAxisID: 'y', order: 2, spanGaps: true,
+          data: iBins.map(i => s.ext[i]), borderColor: css('--ext'), backgroundColor: css('--ext'), tension: .3 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { suggestedMin: -0.2, suggestedMax: 0.2, title: { display: true, text: 'Sentiment' } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Commentaires' } },
+      },
+    },
+  });
+
+  // ---- Graphique de la prédiction toutes les 10 minutes
+  const cps = CPS.filter(t => t <= X);
+  const pts = cps.map(t => m.predictions[String(t)] || null);
+  if (chPred) chPred.destroy();
+  chPred = new Chart($('cPred'), {
+    type: 'line',
+    data: {
+      labels: cps.map(lbl),
+      datasets: [
+        { label: m.dom, data: pts.map(p => p ? p.p[0] * 100 : null), borderColor: css('--dom'), backgroundColor: css('--dom'), tension: .3 },
+        { label: 'Nul', data: pts.map(p => p ? p.p[1] * 100 : null), borderColor: css('--nul'), backgroundColor: css('--nul'), tension: .3 },
+        { label: m.ext, data: pts.map(p => p ? p.p[2] * 100 : null), borderColor: css('--ext'), backgroundColor: css('--ext'), tension: .3 },
+        { label: 'Hasard (1/3)', data: cps.map(() => 33.3), borderColor: css('--muted'), borderDash: [6, 6], borderWidth: 1, pointRadius: 0 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { y: { min: 0, max: 100, ticks: { callback: v => v + ' %' } } },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            afterBody: items => {
+              const p = pts[items[0].dataIndex];
+              return p ? [`Score actuel : ${p.etat[0]} – ${p.etat[1]}`, `Pronostic final : ${p.score[0]} – ${p.score[1]}`] : '';
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // ---- Tableau détaillé
+  $('tab').innerHTML =
+    `<thead><tr><th>Minute</th><th>Score actuel</th><th>Favori</th><th>${esc(m.dom)}</th><th>Nul</th><th>${esc(m.ext)}</th>` +
+    `<th>Pronostic</th><th>Dernière tranche</th><th>Score cité</th></tr></thead><tbody>` +
+    cps.map(t => {
+      const p = m.predictions[String(t)];
+      if (!p) return `<tr><td>${lbl(t)}</td><td colspan="8" class="note">pas assez de commentaires</td></tr>`;
+      const f = favori(p.p, m);
+      const td = tendance(p.dyn, m);
+      return `<tr><td>${lbl(t)}</td><td>${p.etat[0]} – ${p.etat[1]}</td><td>${esc(f ?? 'pas de favori net')}</td>` +
+        `<td>${fmtPct(p.p[0])}</td><td>${fmtPct(p.p[1])}</td><td>${fmtPct(p.p[2])}</td>` +
+        `<td>${p.score[0]} – ${p.score[1]}</td><td>${esc(td ?? 'équilibrée')}</td>` +
+        `<td>${p.indices.score_cite ? esc(p.indices.score_cite) : '—'}</td></tr>`;
+    }).join('') + '</tbody>';
+
+  // ---- Résultat réel (optionnel)
+  const rv = $('resultat');
+  if ($('reveal').checked) {
+    const issue = m.buts_dom > m.buts_ext ? m.dom : (m.buts_dom < m.buts_ext ? m.ext : 'Nul');
+    const f = pX ? favori(pX.p, m) : null;
+    let verdict = '<span class="note">pas de favori net à cette minute</span>';
+    if (f) verdict = f === issue ? '<span class="ok">✔ favori correct</span>' : '<span class="ko">✘ favori incorrect</span>';
+    const exact = pX && pX.score[0] === m.buts_dom && pX.score[1] === m.buts_ext;
+    const etatFin = X >= FIN && pX ? `<br>Score actuel estimé en fin de match : ${pX.etat[0]} – ${pX.etat[1]} ` +
+      (pX.etat[0] === m.buts_dom && pX.etat[1] === m.buts_ext ? '<span class="ok">✔ exact</span>' : '<span class="ko">✘ différent</span>') : '';
+    rv.hidden = false;
+    rv.innerHTML = `Score final : <strong>${esc(m.dom)} ${m.buts_dom} – ${m.buts_ext} ${esc(m.ext)}</strong><br>` +
+      `Issue : <strong>${esc(issue)}</strong><br>` +
+      `Favori · ${lbl(X)} : ${esc(f ?? 'aucun')} ${verdict}<br>` +
+      (pX ? `Pronostic · ${lbl(X)} : ${pX.score[0]} – ${pX.score[1]} ${exact ? '<span class="ok">✔ score exact</span>' : ''}` : '') + etatFin;
+  } else {
+    rv.hidden = true;
+  }
+
+  // ---- Fiabilité globale à X
+  const mt = D.meta.metriques[String(X)];
+  $('fiab').innerHTML = mt
+    ? `Sur ${mt.matchs} matchs (${lbl(X)}, validation croisée, ${esc(mt.variante || D.meta.modele)}) : bonne issue finale dans <strong>${fmtPct(mt.acc_modele)}</strong> des cas, ` +
+      `contre <strong>${fmtPct(mt.acc_base)}</strong> pour « toujours la classe la plus fréquente » et <strong>${fmtPct(mt.acc_elo)}</strong> avec l'Elo seul. ` +
+      `Score final exact : ${fmtPct(mt.score_exact)}. Log loss ${mt.logloss_modele} contre ${mt.logloss_base} (plus bas = probabilités plus fiables). ` +
+      `Erreur moyenne sur les buts d'une équipe : ${mt.mae_modele}. ` +
+      (mt.acc_modele > Math.max(mt.acc_base, mt.acc_elo) + 0.05 ? 'Le modèle fait nettement mieux que les références à cette minute.' : 'Le modèle ne fait pas nettement mieux que les références à cette minute.')
+    : 'Pas de métrique pour cette minute.';
+}
+
+init();
+</script>
+</body>
+</html>
