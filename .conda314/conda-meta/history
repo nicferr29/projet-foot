@@ -1,0 +1,25 @@
+==> 2026-11-12 10:52:12 <==
+# cmd: C:\Users\ferre\anaconda3\Scripts\conda-script.py create -p C:\Users\ferre\projet-foot\.conda314 python=3.14 pip -y
+# conda version: 26.5.3
++defaults/noarch::ca-certificates-2026.11.5-h382c6e5_0
++defaults/noarch::pip-26.2.2-pyh0d26453_0
++defaults/noarch::tzdata-2026c-he532380_0
++defaults/win-64::bzip2-1.0.8-h2bbff1b_6
++defaults/win-64::libexpat-2.10.0-hd7fb8db_0
++defaults/win-64::libffi-3.4.8-h42d73b9_3
++defaults/win-64::libmpdec-4.0.1-h1c6eee0_0
++defaults/win-64::libzlib-1.3.2-h1c6eee0_0
++defaults/win-64::lz4-c-1.9.4-h1c6eee0_5
++defaults/win-64::openssl-3.5.9-hbb43b14_0
++defaults/win-64::python-3.14.10-h7ce57fb_100_cp314
++defaults/win-64::python_abi-3.14-5_cp314
++defaults/win-64::sqlite-3.54.1-hee5a0db_0
++defaults/win-64::tk-9.0.4-hd2208ad_1
++defaults/win-64::ucrt-10.0.22621.0-haa95532_0
++defaults/win-64::vc-14.3-h2df5915_12
++defaults/win-64::vc14_runtime-14.44.35208-h4927774_12
++defaults/win-64::vs2015_runtime-14.44.35208-ha6b5a95_12
++defaults/win-64::xz-5.8.4-hb851c79_0
++defaults/win-64::zlib-1.3.2-h1c6eee0_0
++defaults/win-64::zstd-1.5.7-h56299aa_0
+# update specs: ['python=3.14', 'pip']

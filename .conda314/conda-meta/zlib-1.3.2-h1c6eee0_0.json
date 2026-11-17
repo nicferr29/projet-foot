@@ -1,0 +1,62 @@
+{
+  "name": "zlib",
+  "version": "1.3.2",
+  "build": "h1c6eee0_0",
+  "build_number": 0,
+  "channel": "https://repo.anaconda.com/pkgs/main/win-64",
+  "subdir": "win-64",
+  "fn": "zlib-1.3.2-h1c6eee0_0.conda",
+  "md5": "5885e2a4e16e0ba2f1792f3d61ef41f9",
+  "legacy_bz2_md5": "9b1bb3424d66f91cade684488b3bb932",
+  "url": "https://repo.anaconda.com/pkgs/main/win-64/zlib-1.3.2-h1c6eee0_0.conda",
+  "sha256": "538f7c9b5ed6fa388c51bd499c736fd474826bcd7f2908456e9d2050b486e476",
+  "depends": [
+    "libzlib 1.3.2 h1c6eee0_0",
+    "ucrt >=10.0.20348.0",
+    "vc >=14.3,<15",
+    "vc14_runtime >=14.44.35208"
+  ],
+  "constrains": [],
+  "license": "Zlib",
+  "license_family": "OTHER",
+  "timestamp": 1780963361058,
+  "size": 847370,
+  "_requested_specs": [],
+  "package_tarball_full_path": "C:\\Users\\ferre\\anaconda3\\pkgs\\zlib-1.3.2-h1c6eee0_0.conda",
+  "extracted_package_dir": "C:\\Users\\ferre\\anaconda3\\pkgs\\zlib-1.3.2-h1c6eee0_0",
+  "files": [
+    "Library/include/zconf.h",
+    "Library/include/zlib.h",
+    "Library/lib/pkgconfig/zlib.pc",
+    "Library/lib/z.lib",
+    "Library/lib/zdll.lib",
+    "Library/lib/zlib.lib",
+    "Library/lib/zlibstatic.lib",
+    "Library/share/doc/zlib/zlib/LICENSE",
+    "Library/share/doc/zlib/zlib/algorithm.txt",
+    "Library/share/doc/zlib/zlib/crc-doc.1.0.pdf",
+    "Library/share/doc/zlib/zlib/rfc1950.txt",
+    "Library/share/doc/zlib/zlib/rfc1951.txt",
+    "Library/share/doc/zlib/zlib/rfc1952.txt",
+    "Library/share/doc/zlib/zlib/txtvsbin.txt",
+    "Library/share/man/man3/zlib.3"
+  ],
+  "paths_data": {
+    "paths_version": 1,
+    "paths": [
+      {
+        "_path": "Library/lib/pkgconfig/zlib.pc",
+        "prefix_placeholder": "C:/Users/task_178096273929605/croot/zlib-split_1780962986462/_h_env",
+        "file_mode": "text",
+        "path_type": "hardlink",
+        "sha256": "9fb5f264a472099544c9adeaccb7ab3ae92278c0d2d86798e75f01faf2b9a1b6",
+        "size_in_bytes": 431,
+        "sha256_in_prefix": "caae914e3624c56a6836ef6f600337e3196d88def33a8eb2ac68efd966bc0fb7"
+      }
+    ]
+  },
+  "link": {
+    "source": "C:\\Users\\ferre\\anaconda3\\pkgs\\zlib-1.3.2-h1c6eee0_0",
+    "type": 1
+  }
+}

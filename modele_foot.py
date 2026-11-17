@@ -53,8 +53,8 @@ TRANCHE_RECENTE = 10                    # dernière tranche : de X-10 à X minut
 RECALER_COUP_ENVOI = True               # décale les minutes sur le coup d'envoi détecté dans le texte
 SENTIMENT = "vader"                     # "vader" (rapide) ou "transformer" (plus fin, beaucoup plus lent)
 MODELE_TRANSFORMER = "cardiffnlp/twitter-roberta-base-sentiment-latest"
-MODELE = "auto"                         # "unique" (un modèle pour toutes les minutes), "fenetre" (un par
-                                        # fenêtre) ou "auto" (le plus précis, fenêtre par fenêtre)
+MODELE = "unique"                      # choix fixé à l'avance : évite de sélectionner le meilleur
+                                        # modèle sur les mêmes prédictions qui servent à l'évaluer.
 EVALUER_V1 = True                       # compare aussi avec la v1 dans modele_foot.py
 ELO_INIT, ELO_K, ELO_AVANTAGE_DOM = 1500.0, 20.0, 60.0
 MASQUER_EQUIPES = True                  # remplace les noms d'équipes par "equipedom" / "equipeext"
@@ -564,8 +564,28 @@ def construire_matchs(df, x_min, elo):
 
 
 def empiler(df, elo, fenetres):
-    """Toutes les fenêtres les unes sous les autres (une ligne par match et par fenêtre)."""
-    return pd.concat([construire_matchs(df, x, elo) for x in fenetres], ignore_index=True)
+    """Empile les fenêtres en ne gardant que la cohorte commune à toutes les minutes.
+
+    Cette règle évite de comparer, par exemple, les matchs les plus commentés à 10 minutes
+    avec un ensemble beaucoup plus large à 90 minutes. Chaque match conservé possède ainsi
+    une observation à chacun des checkpoints.
+    """
+    blocs = [construire_matchs(df, x, elo) for x in fenetres]
+    if not blocs:
+        raise ValueError("Aucune fenêtre de prédiction n'a été fournie.")
+    communs = set(blocs[0]["match"])
+    for bloc in blocs[1:]:
+        communs.intersection_update(bloc["match"])
+    if not communs:
+        raise ValueError(
+            "Aucun match n'est disponible à tous les checkpoints. "
+            "Réduisez MIN_SEGMENTS ou vérifiez les données/commentaires."
+        )
+    tailles = [len(set(b["match"])) for b in blocs]
+    print(f"Cohorte commune : {len(communs)} matchs conservés "
+          f"(avant harmonisation : {min(tailles)} à {max(tailles)} selon la fenêtre).")
+    blocs = [b[b["match"].isin(communs)] for b in blocs]
+    return pd.concat(blocs, ignore_index=True).sort_values(["fenetre", "match"]).reset_index(drop=True)
 
 
 # ----------------------------------------------------------------------------
@@ -657,27 +677,18 @@ def predictions_oof(pile, unique=True):
 
 
 def predictions_finales(pile, mode=None):
-    """Prédictions du modèle retenu. En mode « auto », pour chaque fenêtre, la variante (modèle unique
-    ou modèle par fenêtre) qui a la meilleure précision en validation croisée.
-    Renvoie (classes, probabilités, buts attendus dom, buts attendus ext, variante retenue par fenêtre)."""
+    """Prédictions hors-échantillon avec une variante fixée avant l'évaluation.
+
+    Le mode par défaut est MODELE ("unique"). Le mode "fenetre" reste disponible
+    pour une comparaison expérimentale, mais il ne faut pas choisir le gagnant à partir
+    des mêmes scores OOF qui seront ensuite présentés comme résultat final.
+    """
     mode = mode or MODELE
     variantes = {"unique": True, "fenetre": False}
-    if mode != "auto":
-        cls, proba, ld, le = predictions_oof(pile, unique=variantes[mode])
-        return cls, proba, ld, le, {x: mode for x in pile["fenetre"].unique()}
-    oof = {nom: predictions_oof(pile, unique=u) for nom, u in variantes.items()}
-    cls = oof["unique"][0]
-    proba = np.zeros_like(oof["unique"][1])
-    ld, le = np.zeros(len(pile)), np.zeros(len(pile))
-    choix = {}
-    for x, idx in pile.groupby("fenetre").indices.items():
-        y = pile["resultat"].iloc[idx]
-        notes = {nom: (metriques(y, cls, o[1][idx])["accuracy"], -metriques(y, cls, o[1][idx])["log_loss"])
-                 for nom, o in oof.items()}
-        nom = max(notes, key=notes.get)
-        choix[x] = nom
-        proba[idx], ld[idx], le[idx] = oof[nom][1][idx], oof[nom][2][idx], oof[nom][3][idx]
-    return cls, proba, ld, le, choix
+    if mode not in variantes:
+        raise ValueError("MODELE doit être 'unique' ou 'fenetre'. Le mode 'auto' est désactivé.")
+    cls, proba, ld, le = predictions_oof(pile, unique=variantes[mode])
+    return cls, proba, ld, le, {x: mode for x in pile["fenetre"].unique()}
 
 
 def poisson(k, lam):
@@ -707,9 +718,19 @@ def score_estime(lam_d, lam_e, issue, min_d=0, min_e=0):
 # 6. Évaluation
 # ----------------------------------------------------------------------------
 def metriques(y, cls, proba):
-    pred = np.asarray(cls)[proba.argmax(axis=1)]
-    return {"accuracy": accuracy_score(y, pred), "f1_macro": f1_score(y, pred, average="macro"),
-            "log_loss": log_loss(y, proba, labels=cls)}
+    """Métriques multiclasses. Le Brier est la somme des erreurs quadratiques par match."""
+    y = np.asarray(y)
+    cls = np.asarray(cls)
+    proba = np.asarray(proba, dtype=float)
+    pred = cls[proba.argmax(axis=1)]
+    cible = np.column_stack([y == c for c in cls]).astype(float)
+    brier = float(np.mean(np.sum((proba - cible) ** 2, axis=1)))
+    return {
+        "accuracy": accuracy_score(y, pred),
+        "f1_macro": f1_score(y, pred, labels=cls, average="macro", zero_division=0),
+        "log_loss": log_loss(y, proba, labels=cls),
+        "brier": brier,
+    }
 
 
 def evaluer_references(m):

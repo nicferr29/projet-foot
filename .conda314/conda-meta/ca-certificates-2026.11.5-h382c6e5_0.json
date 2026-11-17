@@ -1,0 +1,38 @@
+{
+  "name": "ca-certificates",
+  "version": "2026.11.5",
+  "build": "h382c6e5_0",
+  "build_number": 0,
+  "channel": "https://repo.anaconda.com/pkgs/main/noarch",
+  "subdir": "noarch",
+  "fn": "ca-certificates-2026.11.5-h382c6e5_0.conda",
+  "md5": "d0b66d70de9327cd3a99d4a9c89f6283",
+  "legacy_bz2_md5": "4e515b522d50f665b6c41666a196c20c",
+  "url": "https://repo.anaconda.com/pkgs/main/noarch/ca-certificates-2026.11.5-h382c6e5_0.conda",
+  "sha256": "97e965da5f86e2b722f168cd901a9fdb33b011b64d4e81a9b4bf4b2ba8e8d2d3",
+  "depends": [
+    "__win"
+  ],
+  "constrains": [],
+  "noarch": "generic",
+  "license": "MPL-2.0",
+  "license_family": "Other",
+  "package_type": "noarch_generic",
+  "timestamp": 1794325424362,
+  "size": 115792,
+  "_requested_specs": [],
+  "package_tarball_full_path": "C:\\Users\\ferre\\anaconda3\\pkgs\\ca-certificates-2026.11.5-h382c6e5_0.conda",
+  "extracted_package_dir": "C:\\Users\\ferre\\anaconda3\\pkgs\\ca-certificates-2026.11.5-h382c6e5_0",
+  "files": [
+    "Library/ssl/cacert.pem",
+    "Library/ssl/cert.pem"
+  ],
+  "paths_data": {
+    "paths_version": 1,
+    "paths": []
+  },
+  "link": {
+    "source": "C:\\Users\\ferre\\anaconda3\\pkgs\\ca-certificates-2026.11.5-h382c6e5_0",
+    "type": 1
+  }
+}

@@ -18,7 +18,7 @@ import json
 import numpy as np
 import pandas as pd
 from sklearn.dummy import DummyClassifier
-from sklearn.metrics import accuracy_score, log_loss, mean_absolute_error
+from sklearn.metrics import accuracy_score, log_loss, mean_absolute_error, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
 import modele_foot as mf
@@ -108,20 +108,34 @@ def main():
         base = cross_val_predict(DummyClassifier(strategy="prior"), m, y, cv=cv, method="predict_proba")
         p_elo = cross_val_predict(mf.modele_elo(), m, y, cv=cv, method="predict_proba")
         exact = (scores[sel, 0] == m["buts_dom"].to_numpy()) & (scores[sel, 1] == m["buts_ext"].to_numpy())
+        metriques_modele = mf.metriques(y, cls, proba[sel])
+        pred_base = cls_m[base.argmax(axis=1)]
+        pred_elo = cls_m[p_elo.argmax(axis=1)]
+        cible = np.column_stack([y.to_numpy() == c for c in cls_m]).astype(float)
+        brier_base = float(np.mean(np.sum((base - cible) ** 2, axis=1)))
         metriques[str(x)] = {
             "matchs": int(sel.sum()),
-            "acc_modele": round(accuracy_score(y, issue[sel]), 3),
-            "acc_base": round(accuracy_score(y, cls_m[base.argmax(axis=1)]), 3),
-            "acc_elo": round(accuracy_score(y, cls_m[p_elo.argmax(axis=1)]), 3),
-            "logloss_modele": round(log_loss(y, proba[sel], labels=cls), 3),
+            "acc_modele": round(float(metriques_modele["accuracy"]), 3),
+            "f1_macro_modele": round(float(metriques_modele["f1_macro"]), 3),
+            "logloss_modele": round(float(metriques_modele["log_loss"]), 3),
+            "brier_modele": round(float(metriques_modele["brier"]), 3),
+            "acc_base": round(accuracy_score(y, pred_base), 3),
+            "f1_macro_base": round(f1_score(y, pred_base, labels=cls_m, average="macro", zero_division=0), 3),
             "logloss_base": round(log_loss(y, base, labels=cls_m), 3),
+            "brier_base": round(brier_base, 3),
+            "acc_elo": round(accuracy_score(y, pred_elo), 3),
+            "f1_macro_elo": round(f1_score(y, pred_elo, labels=cls_m, average="macro", zero_division=0), 3),
+            "logloss_elo": round(log_loss(y, p_elo, labels=cls_m), 3),
             "mae_modele": round((mean_absolute_error(m["buts_dom"], lam_d[sel])
                                  + mean_absolute_error(m["buts_ext"], lam_e[sel])) / 2, 3),
             "score_exact": round(float(exact.mean()), 3),
             "variante": "modèle unique" if choix.get(x) == "unique" else "un modèle par fenêtre",
         }
-        print(f"{mf.nom_fenetre(x)} : {metriques[str(x)]['acc_modele']:.0%} de bonnes issues "
-              f"(référence {metriques[str(x)]['acc_base']:.0%}, Elo seul {metriques[str(x)]['acc_elo']:.0%})")
+        print(f"{mf.nom_fenetre(x)} : accuracy {metriques[str(x)]['acc_modele']:.1%}, "
+              f"F1 macro {metriques[str(x)]['f1_macro_modele']:.3f}, "
+              f"log loss {metriques[str(x)]['logloss_modele']:.3f}, "
+              f"Brier {metriques[str(x)]['brier_modele']:.3f} "
+              f"(base {metriques[str(x)]['acc_base']:.1%}, Elo {metriques[str(x)]['acc_elo']:.1%})")
 
     infos = df.groupby("match", sort=False).agg(
         championnat=("championnat", "first"), saison=("saison", "first"), date=("date", "first"),
@@ -146,7 +160,8 @@ def main():
     donnees = {
         "meta": {"checkpoints": CHECKPOINTS, "fin_match": mf.FIN_MATCH, "bin_min": BIN_MIN,
                  "tranche_recente": mf.TRANCHE_RECENTE, "sentiment": mf.SENTIMENT,
-                 "modele": mf.MODELE, "metriques": metriques},
+                 "modele": mf.MODELE, "evaluation": "cohorte commune à tous les checkpoints",
+                 "metriques": metriques},
         "matchs": matchs,
     }
     with open(SORTIE, "w", encoding="utf-8") as f:

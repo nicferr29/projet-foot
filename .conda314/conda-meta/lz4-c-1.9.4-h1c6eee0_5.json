@@ -1,0 +1,58 @@
+{
+  "name": "lz4-c",
+  "version": "1.9.4",
+  "build": "h1c6eee0_5",
+  "build_number": 5,
+  "channel": "https://repo.anaconda.com/pkgs/main/win-64",
+  "subdir": "win-64",
+  "fn": "lz4-c-1.9.4-h1c6eee0_5.conda",
+  "md5": "fcffd5e60dc9a1c922fa83e650abf903",
+  "legacy_bz2_md5": "076ede5c02b3d9ee70dccb5c9baeb39f",
+  "url": "https://repo.anaconda.com/pkgs/main/win-64/lz4-c-1.9.4-h1c6eee0_5.conda",
+  "sha256": "90ce16a742f607e090e7c96bd42f6a0e0217c42dab961b023d127069a4b70bfa",
+  "depends": [
+    "ucrt >=10.0.20348.0",
+    "vc >=14.3,<15",
+    "vc14_runtime >=14.44.35208"
+  ],
+  "constrains": [],
+  "license": "BSD-2-Clause",
+  "license_family": "BSD",
+  "timestamp": 1782922535324,
+  "size": 131602,
+  "_requested_specs": [],
+  "package_tarball_full_path": "C:\\Users\\ferre\\anaconda3\\pkgs\\lz4-c-1.9.4-h1c6eee0_5.conda",
+  "extracted_package_dir": "C:\\Users\\ferre\\anaconda3\\pkgs\\lz4-c-1.9.4-h1c6eee0_5",
+  "files": [
+    "Library/bin/liblz4.dll",
+    "Library/bin/lz4.exe",
+    "Library/include/lz4.h",
+    "Library/include/lz4frame.h",
+    "Library/include/lz4hc.h",
+    "Library/lib/cmake/lz4/lz4Config.cmake",
+    "Library/lib/cmake/lz4/lz4ConfigVersion.cmake",
+    "Library/lib/cmake/lz4/lz4Targets-release.cmake",
+    "Library/lib/cmake/lz4/lz4Targets.cmake",
+    "Library/lib/liblz4.lib",
+    "Library/lib/pkgconfig/liblz4.pc",
+    "Library/share/man/man1/lz4.1"
+  ],
+  "paths_data": {
+    "paths_version": 1,
+    "paths": [
+      {
+        "_path": "Library/lib/pkgconfig/liblz4.pc",
+        "prefix_placeholder": "C:/Users/task_Jrx1JsSPRIO_n_0/croot/lz4-c-split_1782922381437/_h_env",
+        "file_mode": "text",
+        "path_type": "hardlink",
+        "sha256": "87c20c10c6054e13071bd9be17c4468da850fa5af174a5098855bc7b8dc716d2",
+        "size_in_bytes": 481,
+        "sha256_in_prefix": "508bc39e5110ab955379e4aae766b600f6d9b18cb42eb0df7da32c67b324d6e9"
+      }
+    ]
+  },
+  "link": {
+    "source": "C:\\Users\\ferre\\anaconda3\\pkgs\\lz4-c-1.9.4-h1c6eee0_5",
+    "type": 1
+  }
+}

@@ -44,7 +44,8 @@ def lire_annotations():
             mm, ss = temps.split(":")
             lignes.append({"match": match, "label": a["label"], "mi_temps": int(mi_temps),
                            "minute_video": int(mm) + int(ss) / 60, "equipe": a.get("team")})
-    return pd.DataFrame(lignes)
+    colonnes = ["match", "label", "mi_temps", "minute_video", "equipe"]
+    return pd.DataFrame(lignes, columns=colonnes)
 
 
 def apparier(vrais, detectes):
@@ -63,6 +64,9 @@ def main():
         print("Téléchargement des annotations SoccerNet (Labels-v2.json)...")
         telecharger()
     ann = lire_annotations()
+    if ann.empty:
+        print("Aucune annotation Goal/Kick-off trouvée dans les fichiers SoccerNet.")
+        return
     df, _ = mf.preparer_tout()
     communs = set(ann["match"]) & set(df["match"])
     print(f"\n{ann['match'].nunique()} matchs annotés, {len(communs)} en commun avec SN-echoes")
@@ -92,8 +96,10 @@ def main():
     n_det_eq = int(det["evt_but_dom"].sum() + det["evt_but_ext"].sum())
     print("\n=== Buts ===")
     print(f"Buts annotés : {len(vrais)}, détections : {n_det} (dont {n_det_eq} attribuées à une équipe)")
+    faux_positifs = max(n_det - trouves, 0)
     print(f"Rappel (buts retrouvés) : {trouves / max(len(vrais), 1):.0%} · "
-          f"précision (détections justes) : {trouves / max(n_det, 1):.0%}")
+          f"précision (détections justes) : {trouves / max(n_det, 1):.0%} · "
+          f"faux positifs estimés : {faux_positifs}")
     print(f"Avec la bonne équipe : rappel {trouves_eq / max(len(vrais), 1):.0%} · "
           f"précision {trouves_eq / max(n_det_eq, 1):.0%}")
 

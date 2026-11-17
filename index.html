@@ -63,6 +63,14 @@
   .warn{padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line)}
   .ind div{margin-bottom:3px;font-size:14px}
   .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+  .metric{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+  .metric .value{font-size:20px;font-weight:700;line-height:1.25}
+  .metric .label{font-size:12px;color:var(--muted);margin-top:3px}
+  .metric-table{margin-top:14px}
+  .metric-table td:first-child,.metric-table th:first-child{text-align:left}
+  .metric-table tr.current{background:var(--bg);font-weight:700}
+  .metric-help{margin-top:10px}
 </style>
 </head>
 <body>
@@ -142,6 +150,9 @@
   <section class="card section">
     <h2>Fiabilité du modèle</h2>
     <div id="fiab" class="note"></div>
+    <div id="fiabMetrics" class="metric-grid"></div>
+    <div class="wrap-table metric-table"><table id="fiabTable"></table></div>
+    <p class="note metric-help">L'accuracy et le F1 macro sont meilleurs lorsqu'ils sont élevés. Le log loss et le Brier score sont meilleurs lorsqu'ils sont faibles. Ces indicateurs évaluent les prédictions globales à chaque minute, pas la certitude du pronostic d'un match individuel. Les résultats dépendent du nombre de matchs évalués.</p>
   </section>
 
   <p class="note section">
@@ -366,15 +377,44 @@ function render() {
     rv.hidden = true;
   }
 
-  // ---- Fiabilité globale à X
-  const mt = D.meta.metriques[String(X)];
-  $('fiab').innerHTML = mt
-    ? `Sur ${mt.matchs} matchs (${lbl(X)}, validation croisée, ${esc(mt.variante || D.meta.modele)}) : bonne issue finale dans <strong>${fmtPct(mt.acc_modele)}</strong> des cas, ` +
-      `contre <strong>${fmtPct(mt.acc_base)}</strong> pour « toujours la classe la plus fréquente » et <strong>${fmtPct(mt.acc_elo)}</strong> avec l'Elo seul. ` +
-      `Score final exact : ${fmtPct(mt.score_exact)}. Log loss ${mt.logloss_modele} contre ${mt.logloss_base} (plus bas = probabilités plus fiables). ` +
-      `Erreur moyenne sur les buts d'une équipe : ${mt.mae_modele}. ` +
-      (mt.acc_modele > Math.max(mt.acc_base, mt.acc_elo) + 0.05 ? 'Le modèle fait nettement mieux que les références à cette minute.' : 'Le modèle ne fait pas nettement mieux que les références à cette minute.')
-    : 'Pas de métrique pour cette minute.';
+  // ---- Fiabilité globale à X : métriques OOF et progression sur les checkpoints
+  const mts = D.meta.metriques || {};
+  const mt = mts[String(X)];
+  const n = v => v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(3);
+  const pct = v => v == null || !Number.isFinite(Number(v)) ? '—' : fmtPct(Number(v));
+  const fiab = $('fiab');
+  const cards = $('fiabMetrics');
+  const table = $('fiabTable');
+
+  if (!mt) {
+    fiab.textContent = 'Pas de métrique disponible pour cette minute.';
+    cards.innerHTML = '';
+    table.innerHTML = '';
+  } else {
+    const accGain = mt.acc_modele != null && mt.acc_elo != null
+      ? (mt.acc_modele - mt.acc_elo) * 100 : null;
+    fiab.innerHTML = `Évaluation sur <strong>${mt.matchs}</strong> matchs comparables à toutes les fenêtres, ` +
+      `validation croisée (${esc(mt.variante || D.meta.modele || 'modèle')}). ` +
+      (accGain == null ? '' : `Écart d'accuracy avec l'Elo : <strong>${accGain >= 0 ? '+' : ''}${accGain.toFixed(1)} points</strong>.`);
+
+    cards.innerHTML = [
+      ['Accuracy', pct(mt.acc_modele), 'Part des issues correctement prédites'],
+      ['F1 macro', n(mt.f1_macro_modele), 'Équilibre entre les trois issues'],
+      ['Log loss', n(mt.logloss_modele), 'Plus bas = probabilités mieux évaluées'],
+      ['Brier score', n(mt.brier_modele), 'Plus bas = probabilités plus proches du résultat réel']
+    ].map(([label, value, help]) =>
+      `<div class="metric"><div class="value">${value}</div><div class="label"><strong>${label}</strong><br>${help}</div></div>`
+    ).join('');
+
+    const rows = Object.entries(mts).sort((a,b) => Number(a[0]) - Number(b[0]));
+    table.innerHTML = `<thead><tr><th>Fenêtre</th><th>Matchs</th><th>Accuracy modèle</th><th>Accuracy Elo</th><th>Accuracy base</th><th>F1 macro</th><th>Log loss</th><th>Brier</th></tr></thead><tbody>` +
+      rows.map(([minute, v]) => {
+        const selected = Number(minute) === Number(X) ? ' class="current"' : '';
+        return `<tr${selected}><td>${lbl(Number(minute))}</td><td>${v.matchs ?? '—'}</td>` +
+          `<td>${pct(v.acc_modele)}</td><td>${pct(v.acc_elo)}</td><td>${pct(v.acc_base)}</td>` +
+          `<td>${n(v.f1_macro_modele)}</td><td>${n(v.logloss_modele)}</td><td>${n(v.brier_modele)}</td></tr>`;
+      }).join('') + '</tbody>';
+  }
 }
 
 init();
