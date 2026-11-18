@@ -1,11 +1,8 @@
 datasets
-huggingface_hub
 numpy
 pandas
+scipy
 scikit-learn
-vaderSentiment
-# Optionnel : valider_buts.py (annotations SoccerNet)
-# SoccerNet
-# Optionnel : SENTIMENT = "transformer" dans modele_foot.py
-# transformers
-# torch
+SoccerNet
+torch
+transformers

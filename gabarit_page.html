@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match en direct</title>
+<style>
+  :root{
+    --nuit:#0a120e; --verre:rgba(8,18,13,.72); --verre-bord:rgba(255,255,255,.14);
+    --txt:#f4f7f5; --doux:#b3c2ba; --nul:#9aa5a0; --ok:#3ddc84; --ko:#ff5c5c; --jaune:#ffd54a;
+    --dom:#4c8dff; --ext:#ff8a3d;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;min-height:100%;color:var(--txt);background:var(--nuit);
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  /* pelouse du « studio » autour de l'écran */
+  .fond{position:fixed;inset:0;z-index:0;
+    background:radial-gradient(ellipse at 50% 35%,rgba(0,0,0,0) 0%,rgba(0,0,0,.55) 85%),
+      repeating-linear-gradient(90deg,#1f5a2a 0 70px,#1b5226 70px 140px)}
+  .page{position:relative;z-index:1;display:flex;flex-direction:column;gap:12px;padding:14px 16px 18px;max-width:1500px;margin:0 auto}
+
+  /* En-tête */
+  .haut{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap}
+  .titre{min-width:0}
+  .titre b{display:block;font-size:15px;letter-spacing:.02em}
+  .titre span{font-size:12.5px;color:var(--doux)}
+  .choix{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0}
+  select,button{font:inherit;font-size:14px;color:var(--txt);background:rgba(0,0,0,.4);border:1px solid var(--verre-bord);
+    border-radius:8px;padding:7px 10px}
+  select{max-width:100%;min-width:0}
+  #match{min-width:240px;max-width:420px}
+  button{cursor:pointer}
+  button:hover{border-color:rgba(255,255,255,.45)}
+  button:focus-visible,select:focus-visible{outline:2px solid var(--jaune);outline-offset:1px}
+
+  /* L'écran : le terrain filmé, avec les incrustations télé */
+  .ecran{position:relative;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 14px 40px rgba(0,0,0,.5);background:#2a7236}
+  .ecran svg.terrain{display:block;width:100%;height:clamp(280px,calc(100vh - 470px),640px);overflow:visible}
+  .ecran::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 55%,rgba(0,0,0,.35) 100%)}
+
+  /* Tableau d'affichage */
+  .tableau{position:absolute;top:12px;right:12px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:4px;
+    font-variant-numeric:tabular-nums;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))}
+  .barre{display:flex;align-items:stretch;height:38px;border-radius:6px;overflow:hidden;
+    background:linear-gradient(#1d2738,#0f1520);color:#fff;font-weight:800;letter-spacing:.04em}
+  .barre .comp{display:flex;align-items:center;padding:0 9px;background:#e8edf3;color:#0f1520;font-size:12px;letter-spacing:.06em}
+  .barre .eq{display:flex;align-items:center;gap:7px;padding:0 10px;font-size:16px}
+  .kit{display:flex;width:9px;align-self:stretch;margin:7px 0}
+  .kit i{flex:1}
+  .rouges{display:flex;gap:2px}
+  .rouges i{width:7px;height:11px;background:#e5202e;border-radius:1.5px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+  .barre .score{display:flex;align-items:center;gap:7px;padding:0 11px;background:rgba(255,255,255,.1);font-size:20px}
+  .barre .score .t{opacity:.55;font-weight:600}
+  .barre .horloge{display:flex;align-items:center;gap:6px;padding:0 10px;background:#0a0e15;font-size:16px;min-width:76px;justify-content:center}
+  .barre .add{background:var(--jaune);color:#111;font-size:12px;padding:1px 5px;border-radius:3px}
+  .lu{display:flex;align-items:center;gap:8px;padding:3px 9px;border-radius:5px;background:rgba(10,14,21,.88);
+    font-size:12px;color:var(--doux);letter-spacing:.04em;text-transform:uppercase}
+  .lu b{color:#fff;font-size:14px;letter-spacing:0}
+  .lu .quoi{color:var(--jaune);font-weight:700}
+  .lu .sep{width:1px;align-self:stretch;background:rgba(255,255,255,.2)}
+  .barre .score.eclat{animation:eclat 1.2s ease-out}
+  @keyframes eclat{0%{background:var(--jaune);color:#111}100%{background:rgba(255,255,255,.1);color:#fff}}
+  .onglet{padding:5px 11px;border-radius:5px;font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    transform-origin:top right;animation:glisse .35s ease-out}
+  @keyframes glisse{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+  /* Annonce plein écran : BUT ! / MI-TEMPS / FIN */
+  .annonce{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .annonce .boite{text-align:center;padding:10px 46px 14px;transform:skewX(-10deg);border-radius:6px;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);animation:surgit .5s cubic-bezier(.2,1.6,.4,1)}
+  .annonce .boite > *{transform:skewX(10deg)}
+  .annonce .gros{font-size:clamp(30px,8vw,104px);font-weight:900;font-style:italic;line-height:1;letter-spacing:.02em}
+  .annonce .petit{font-size:clamp(14px,1.6vw,19px);font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+  @keyframes surgit{from{opacity:0;transform:skewX(-10deg) scale(.3)}to{opacity:1;transform:skewX(-10deg) scale(1)}}
+
+  /* Bandeau bas (ce que le modèle vient de lire) */
+  .bandeau{position:absolute;left:12px;bottom:12px;z-index:3;max-width:min(640px,calc(100% - 24px));display:flex;
+    border-radius:6px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.45);animation:glisse .35s ease-out}
+  .bandeau .tag{background:var(--jaune);color:#111;font-weight:900;font-size:12px;letter-spacing:.06em;padding:8px 10px;
+    display:flex;align-items:center;text-transform:uppercase;white-space:nowrap}
+  .bandeau .txt{background:rgba(10,14,21,.9);padding:7px 12px;font-size:13.5px;min-width:0}
+  .bandeau .txt q{color:var(--doux);font-style:italic;quotes:"« " " »"}
+  .note-ecran{position:absolute;left:12px;top:12px;z-index:2;font-size:11.5px;color:rgba(255,255,255,.75);
+    background:rgba(0,0,0,.35);padding:3px 8px;border-radius:5px;max-width:calc(100% - 24px)}
+
+  /* Lecteur */
+  .lecteur{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px 14px;align-items:center;
+    background:var(--verre);border:1px solid var(--verre-bord);backdrop-filter:blur(6px);border-radius:12px;padding:9px 12px}
+  .boutons{display:flex;gap:6px}
+  .boutons button{min-width:44px}
+  .frise{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
+  .frise button{padding:6px 0;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.3)}
+  .frise button.passe{background:rgba(255,255,255,.14)}
+  .frise button.actif{background:var(--jaune);color:#111;border-color:var(--jaune)}
+  .reglages{display:flex;gap:12px;align-items:center;font-size:13px;color:var(--doux);flex-wrap:wrap}
+  .reglages label{display:flex;gap:6px;align-items:center;white-space:nowrap}
+  .reglages select{padding:5px 8px;font-size:13px}
+
+  /* Panneau d'analyse */
+  .panneau{background:var(--verre);border:1px solid var(--verre-bord);backdrop-filter:blur(8px);border-radius:14px;padding:16px;
+    display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.9fr) minmax(0,1.1fr);gap:18px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+  .panneau > *{min-width:0}
+  .panneau h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--doux);font-weight:700}
+  .graphe svg{width:100%;height:auto;display:block}
+  .legende{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--doux);margin-top:6px}
+  .pastille{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .chances{display:grid;gap:7px;margin-bottom:14px}
+  .chance{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:3px 10px;align-items:center}
+  .chance .nom{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chance .val{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+  .chance .jauge{grid-column:1 / -1;height:9px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
+  .chance .jauge span{display:block;height:100%;border-radius:5px;transition:width .5s ease}
+  .versus{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;text-align:center;
+    padding:10px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid var(--verre-bord)}
+  .versus .lib{font-size:11.5px;color:var(--doux);text-transform:uppercase;letter-spacing:.06em}
+  .versus .gros{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+  .versus .vs{color:var(--doux);font-weight:700}
+  .verdict{text-align:center;font-size:13px;margin-top:7px;min-height:20px}
+  .bon{color:var(--ok);font-weight:700} .mauvais{color:var(--ko);font-weight:700}
+  .lecture{margin-top:10px;font-size:13px;color:var(--doux)}
+  .lecture b{color:var(--txt)}
+  .onglets{display:flex;gap:6px;margin-bottom:8px}
+  .onglets button{font-size:12.5px;padding:5px 10px;border-radius:999px}
+  .onglets button[aria-selected="true"]{background:var(--txt);color:#111;border-color:var(--txt);font-weight:700}
+  .fil{list-style:none;margin:0;padding:0 4px 0 0;display:grid;gap:9px;max-height:300px;overflow:auto}
+  .fil li{display:grid;grid-template-columns:50px minmax(0,1fr);gap:8px;font-size:13.5px;align-items:start}
+  .fil .min{font-weight:800;font-variant-numeric:tabular-nums}
+  .fil .qui{font-weight:700}
+  .fil q{display:block;color:var(--doux);font-style:italic;margin-top:2px;quotes:"« " " »"}
+  .fil .appui{display:block;margin-top:3px;font-size:12.5px;color:var(--txt)}
+  .fil .appui q{display:inline;color:var(--doux)}
+  .note{font-size:12.5px;color:var(--doux)}
+  .carton{display:inline-block;width:9px;height:12px;border-radius:1.5px;vertical-align:-1px;margin-right:2px}
+
+  .modale{position:fixed;inset:0;z-index:9;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modale .boite{background:#101a15;border:1px solid var(--verre-bord);border-radius:14px;padding:18px;width:min(760px,100%);
+    max-height:90vh;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--verre-bord);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--doux);font-weight:600}
+
+  @media (prefers-reduced-motion:reduce){
+    .onglet,.annonce .boite,.bandeau{animation:none !important}
+    .chance .jauge span{transition:none}
+  }
+  @media (max-width:1100px){
+    .panneau{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+    .panneau .colfil{grid-column:1 / -1}
+    .lecteur{grid-template-columns:auto minmax(0,1fr)}
+    .reglages{grid-column:1 / -1}
+  }
+  @media (max-width:720px){
+    .page{padding:12px 16px 16px}
+    .panneau{grid-template-columns:minmax(0,1fr);padding:14px}
+    .ecran{display:flex;flex-direction:column}
+    .ecran svg.terrain{height:auto;aspect-ratio:1100/720}
+    .tableau{order:-1;position:relative;top:auto;right:auto;align-items:stretch;padding:8px 8px 0;filter:none}
+    .barre{height:34px}
+    .barre .eq{font-size:14px;padding:0 7px;gap:5px;flex:1;justify-content:center}
+    .barre .score{font-size:18px;padding:0 8px}
+    .barre .horloge{min-width:62px;font-size:14px;padding:0 7px}
+    .barre .comp{padding:0 6px;font-size:11px}
+    .lu,.onglet{align-self:flex-end}
+    .lecteur{grid-template-columns:minmax(0,1fr)}
+    .boutons button{flex:1}
+    .frise{grid-template-columns:repeat(6,minmax(0,1fr))}
+    #match{min-width:0;flex:1 1 100%;max-width:none}
+    .choix{width:100%}
+    .choix select#comp{flex:1 1 100%}
+    .choix button{flex:1}
+    .versus .gros{font-size:28px}
+    .bandeau{left:8px;right:8px;bottom:8px;max-width:none}
+    .bandeau .txt{font-size:12.5px}
+    .note-ecran{display:none}
+    .annonce .boite{padding:8px 22px 10px}
+  }
+</style>
+</head>
+<body>
+<div class="fond" aria-hidden="true"></div>
+<div class="page">
+  <header class="haut">
+    <div class="titre">
+      <b>Le match lu dans les commentaires</b>
+      <span id="infoMatch"></span>
+    </div>
+    <div class="choix">
+      <select id="comp" aria-label="Compétition"></select>
+      <select id="match" aria-label="Match"></select>
+      <button id="hasard" type="button">Match au hasard</button>
+      <button id="fiab" type="button">Fiabilité du modèle</button>
+    </div>
+  </header>
+
+  <section class="ecran" aria-label="Le terrain">
+    <svg class="terrain" id="terrain" viewBox="0 0 1100 720" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs>
+        <pattern id="rayures" x="25" width="150" height="10" patternUnits="userSpaceOnUse">
+          <rect width="75" height="10" fill="#2f7d3b"/><rect x="75" width="75" height="10" fill="#2a7236"/>
+        </pattern>
+        <pattern id="mailles" width="6" height="6" patternUnits="userSpaceOnUse">
+          <path d="M0 0L6 6M6 0L0 6" stroke="#fff" stroke-opacity=".35" stroke-width=".8"/>
+        </pattern>
+      </defs>
+      <rect x="-3000" y="-2000" width="7100" height="4720" fill="url(#rayures)"/>
+      <g fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="3">
+        <rect x="25" y="20" width="1050" height="680"/>
+        <line x1="550" y1="20" x2="550" y2="700"/>
+        <circle cx="550" cy="360" r="91.5"/>
+        <rect x="25" y="158.4" width="165" height="403.2"/><rect x="910" y="158.4" width="165" height="403.2"/>
+        <rect x="25" y="268.4" width="55" height="183.2"/><rect x="1020" y="268.4" width="55" height="183.2"/>
+        <path d="M190 286.9 A91.5 91.5 0 0 1 190 433.1"/><path d="M910 286.9 A91.5 91.5 0 0 0 910 433.1"/>
+        <path d="M25 30 A10 10 0 0 0 35 20"/><path d="M1065 20 A10 10 0 0 0 1075 30"/>
+        <path d="M35 700 A10 10 0 0 0 25 690"/><path d="M1075 690 A10 10 0 0 0 1065 700"/>
+      </g>
+      <g fill="#fff" fill-opacity=".9"><circle cx="550" cy="360" r="4"/><circle cx="135" cy="360" r="4"/><circle cx="965" cy="360" r="4"/></g>
+      <g id="buts" stroke="#fff" stroke-width="3">
+        <rect id="filetG" x="5" y="323.4" width="20" height="73.2" fill="url(#mailles)"/>
+        <rect id="filetD" x="1075" y="323.4" width="20" height="73.2" fill="url(#mailles)"/>
+      </g>
+      <g id="joueurs"></g>
+      <g id="arbitre"><ellipse rx="11" ry="4.5" cy="11" fill="rgba(0,0,0,.28)"/><circle r="10.5" fill="#151515" stroke="#ffd54a" stroke-width="3"/>
+        <rect id="carte" x="-7" y="-42" width="14" height="19" rx="2" fill="#ffd54a" stroke="#111" stroke-width="1.5" visibility="hidden"/></g>
+      <g id="ballon"><ellipse id="ombreBallon" rx="7" ry="3.5" fill="rgba(0,0,0,.35)"/><circle id="balle" r="7" fill="#fff" stroke="#1b1b1b" stroke-width="2"/></g>
+    </svg>
+
+    <div class="tableau" aria-live="polite">
+      <div class="barre">
+        <div class="comp" id="tComp">–</div>
+        <div class="eq"><span class="kit" id="kDom"></span><span id="cDom">DOM</span><span class="rouges" id="rDom"></span></div>
+        <div class="score" id="tScore" title="Score lu par le modèle dans les commentaires"><span id="sDom">0</span><span class="t">–</span><span id="sExt">0</span></div>
+        <div class="eq"><span class="rouges" id="rExt"></span><span id="cExt">EXT</span><span class="kit" id="kExt"></span></div>
+        <div class="horloge"><span id="tHorloge">00:00</span><span class="add" id="tAdd" hidden></span></div>
+      </div>
+      <div class="lu" id="tLuBoite"><span class="quoi">↑ Score lu par le modèle</span><span class="sep"></span><span id="tLuLib">Vrai score</span><b id="tLu">0 – 0</b></div>
+      <div class="onglet" id="onglet" hidden></div>
+    </div>
+    <div class="note-ecran" id="noteEcran"></div>
+    <div class="annonce" id="annonce" hidden><div class="boite" id="annonceBoite"><div class="gros" id="annonceGros"></div><div class="petit" id="annoncePetit"></div></div></div>
+    <div class="bandeau" id="bandeau" hidden><div class="tag" id="bandeauTag">Le modèle lit</div><div class="txt" id="bandeauTxt"></div></div>
+  </section>
+
+  <nav class="lecteur" aria-label="Lecture du match">
+    <div class="boutons">
+      <button id="prec" type="button" aria-label="Point précédent">◀</button>
+      <button id="play" type="button" aria-label="Lecture">▶</button>
+      <button id="suiv" type="button" aria-label="Point suivant">▶▶</button>
+    </div>
+    <div class="frise" id="frise"></div>
+    <div class="reglages">
+      <label>Vitesse <select id="vitesse"><option value="0">×1</option><option value="1" selected>×2</option><option value="2">×4</option></select></label>
+      <label><input type="checkbox" id="suspense"> Mode suspense</label>
+    </div>
+  </nav>
+
+  <main class="panneau">
+    <div class="graphe">
+      <h2>Qui va gagner ? Évolution des chances</h2>
+      <svg id="courbe" viewBox="0 0 620 270" role="img" aria-label="Chances de chaque résultat selon la minute"></svg>
+      <div class="legende" id="legende"></div>
+    </div>
+    <div>
+      <h2 id="titrePoint">Prédiction</h2>
+      <div class="chances" id="chances"></div>
+      <div class="versus">
+        <div><div class="lib">Pronostic final</div><div class="gros" id="prono">–</div></div>
+        <div class="vs">vs</div>
+        <div><div class="lib">Score final réel</div><div class="gros" id="final">–</div></div>
+      </div>
+      <div class="verdict" id="verdict"></div>
+      <div class="lecture" id="lecture"></div>
+    </div>
+    <div class="colfil">
+      <div class="onglets" role="tablist">
+        <button type="button" role="tab" id="ongletLu" aria-selected="true">Lu dans les commentaires</button>
+        <button type="button" role="tab" id="ongletVrai" aria-selected="false">Le vrai match</button>
+      </div>
+      <ul class="fil" id="fil"></ul>
+    </div>
+  </main>
+</div>
+
+<div class="modale" id="modale" hidden>
+  <div class="boite" role="dialog" aria-labelledby="titreFiab">
+    <h2 style="margin-top:0" id="titreFiab">Fiabilité du modèle</h2>
+    <p class="note">Chaque match est prédit par un modèle qui ne l'a jamais vu (validation croisée sur les matchs annotés par SoccerNet).
+      « Bon résultat » : le résultat le plus probable est le bon. Repère : prédire toujours la victoire à domicile donne <b id="repere"></b>.</p>
+    <table id="tabFiab"></table>
+    <p class="note" id="noteFiab"></p>
+    <p class="note">Les petits joueurs sont une illustration : ils rejouent les actions annotées par SoccerNet (buts, tirs, corners,
+      touches, cartons) au bon moment, mais leurs positions sont inventées. Ces annotations ne servent jamais à prédire.</p>
+    <p style="text-align:right;margin-bottom:0"><button id="fermer" type="button">Fermer</button></p>
+  </div>
+</div>
+
+<script>
+const D = /*DONNEES*/null;
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = v => Math.round(v * 100) + ' %';
+const fr1 = v => v.toFixed(1).replace('.', ',');
+const signe = v => (v < 0 ? '−' : '+') + fr1(Math.abs(v));
+const sc = s => s ? `${s[0]} – ${s[1]}` : '– : –';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const hasard = (a, b) => a + Math.random() * (b - a);
+const REDUIT = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COMP_COURT = {'Premier League': 'PL', 'LaLiga': 'LL', 'Serie A': 'SA', 'Bundesliga': 'BL', 'Ligue 1': 'L1', 'Ligue des champions': 'LDC'};
+const SEC_PAR_MINUTE = [0.6, 0.3, 0.15];   // vitesse ×1, ×2, ×4
+const VIT_MOTEUR = [1, 1.35, 1.8];
+
+/* ============================== Couleurs des équipes ============================== */
+const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const lum = h => { const [r, g, b] = rgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; });
+  return .2126 * r + .7152 * g + .0722 * b; };
+const ecart = (a, b) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+let C = {};   // couleurs du match affiché
+function teintes(M) {
+  // maillots sur le terrain : l'extérieur change de maillot s'il ressemble trop au domicile
+  const md = M.dom.c1;
+  let me = M.ext.c1;
+  if (ecart(md, me) < 120) me = M.ext.c2;
+  if (ecart(md, me) < 120) me = lum(md) > .4 ? '#1d2230' : '#f2f2f2';
+  // couleurs lisibles sur fond sombre (courbes, textes)
+  const lisible = (a, b) => lum(a) >= .08 ? a : (lum(b) >= .08 ? b : '#e6e6e6');
+  const ld = lisible(md, M.dom.c2);
+  let le = lisible(me, me === M.ext.c1 ? M.ext.c2 : M.ext.c1);
+  if (ecart(ld, le) < 130) {
+    const choix = (lum(me) < .1 ? ['#e6e6e6'] : []).concat(['#4c8dff', '#ffd54a', '#3ddc84', '#ff8a3d', '#e6e6e6']);
+    le = choix.find(c => ecart(c, ld) >= 150 && ecart(c, '#9aa5a0') >= 100) || '#4c8dff';
+  }
+  const neutre = k => lum(k) > .4 ? '#333' : '#e8e8e8';
+  const bord = (k, sec, adverse) => ecart(k, sec) > 70 && ecart(sec, adverse) > 120 ? sec : neutre(k);
+  return {maillot: [md, me], bord: [bord(md, M.dom.c2, me), bord(me, me === M.ext.c1 ? M.ext.c2 : M.ext.c1, md)],
+          numero: [lum(md) > .35 ? '#111' : '#fff', lum(me) > .35 ? '#111' : '#fff'], ligne: [ld, le],
+          gardien: ['#b6f23a', '#c084fc']};
+}
+const texteSur = c => lum(c) > .35 ? '#111' : '#fff';
+
+/* ============================== Temps du match ============================== */
+// τ : minute « continue » ; 1re mi-temps de 0 à fin1, 2e mi-temps de 100 à 100 + fin2
+const tauDe = (mt, t) => (mt - 1) * 100 + t;
+let M = null, TP = [], EV = [], k = 0, T = 0, iev = 0, lecture = false, bloque = false, vit = 1;
+let scoreVu = [0, 0], scoreLu = [0, 0], rougesVus = [0, 0], phase = 1, finale = false;   // vrai score, score lu par le modèle
+let vue = 'lu';   // onglet du fil
+
+function tempsDesPoints(M) {
+  return [0, 10, 20, 30, 40, M.fin_mt[0], 105, 115, 125, 135, 145, 100 + Math.max(M.fin_mt[1], 45.1)];
+}
+function horloge() {
+  const mt = T >= 100 ? 2 : 1, t = mt === 1 ? T : T - 100;
+  if (k === 11 && !lecture || finale) return {txt: 'FIN', add: ''};
+  if (k === 5 && !lecture && T < 100) return {txt: 'MT', add: ''};
+  const tot = (mt === 1 ? 0 : 45) + Math.min(t, 59.99);
+  const mm = Math.floor(tot), ss = Math.floor((tot - mm) * 60);
+  const add = t > 45 ? Math.max(1, Math.ceil(M.fin_mt[mt - 1] - 45)) : 0;
+  return {txt: `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`, add: add ? '+' + add : ''};
+}
+const minuteTexte = ev => { const m = Math.floor(ev.t) + 1;
+  return ev.mt === 1 ? (m <= 45 ? m + "'" : '45+' + (m - 45) + "'") : (m <= 45 ? (45 + m) + "'" : '90+' + (m - 45) + "'"); };
+const modeLu = () => $('suspense').checked || !M.evenements;
+const nomEq = e => e === 0 ? M.dom.nom : M.ext.nom;
+
+/* ============================== Le terrain et les joueurs ============================== */
+const X0 = 25, X1 = 1075, Y0 = 20, Y1 = 700, LL = 1050, WW = 680, CX = 550, CY = 360;
+// 4-4-2 : [u (0 = sa ligne de but, 1 = celle d'en face), v (largeur), numéro]
+const FORME = [[.03, .5, 1], [.17, .13, 2], [.15, .38, 4], [.15, .62, 5], [.17, .87, 3], [.35, .15, 7], [.32, .40, 6],
+               [.32, .60, 8], [.35, .85, 11], [.47, .42, 9], [.47, .58, 10]];
+const ORDRE_EXCLUS = [8, 5, 10, 2, 7];   // qui sort en cas de carton rouge (illustration)
+let J = [[], []], sens = [1, -1], horlogeMoteur = 0, taches = [], jeton = 0, occupe = false, engageur = 0;
+const BAL = {x: CX, y: CY, z: 0, mode: 'mort', eq: 0, i: 9, vol: null, prochaine: 0};
+const ARB = {x: CX - 60, y: CY + 60, vx: 0, vy: 0, fixe: null, el: null};
+
+const versX = (e, u) => sens[e] > 0 ? X0 + u * LL : X1 - u * LL;
+const versY = (e, v) => sens[e] > 0 ? Y0 + v * WW : Y1 - v * WW;
+const enU = (e, x) => sens[e] > 0 ? (x - X0) / LL : (X1 - x) / LL;
+const enV = (e, y) => sens[e] > 0 ? (y - Y0) / WW : (Y1 - y) / WW;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function creerJoueurs() {
+  const g = $('joueurs');
+  g.innerHTML = '';
+  J = [[], []];
+  for (const e of [0, 1]) FORME.forEach(([u, v, n], i) => {
+    const el = document.createElementNS(NS, 'g');
+    const gk = i === 0, kit = gk ? C.gardien[e] : C.maillot[e];
+    el.innerHTML = `<ellipse rx="15" ry="5.5" cy="14" fill="rgba(0,0,0,.3)"/><circle r="15" fill="${kit}" stroke="${gk ? '#222' : C.bord[e]}" stroke-width="2.5"/>` +
+      `<text y="5.2" text-anchor="middle" font-size="15" font-weight="800" font-family="system-ui,sans-serif" fill="${gk ? '#111' : C.numero[e]}">${n}</text>`;
+    g.appendChild(el);
+    J[e].push({x: versX(e, u), y: versY(e, v), vx: 0, vy: 0, u, v, n, gk, actif: true, fixe: null, el,
+               phase: Math.random() * 6.28, sortie: false});
+  });
+  ARB.el = $('arbitre');
+}
+const actifs = e => J[e].filter(j => j.actif && !j.sortie);
+function appliquerRouges(r) {
+  for (const e of [0, 1]) J[e].forEach((j, i) => {
+    const exclu = ORDRE_EXCLUS.indexOf(i);
+    j.actif = !(exclu >= 0 && exclu < r[e]); j.sortie = false;
+    j.el.style.display = j.actif ? '' : 'none';
+  });
+}
+function posEngagement(f, j, e) {
+  let u = Math.min(j.u, .44), v = j.v;
+  if (f === e && j.n === 9) { u = .497; v = .5; }
+  if (f === e && j.n === 10) { u = .48; v = .56; }
+  return {x: versX(f, u), y: versY(f, v)};
+}
+function placerEngagement(e) {
+  // tout le monde dans son camp, l'équipe e au centre (téléportation, entre deux phases de jeu)
+  for (const f of [0, 1]) J[f].forEach(j => {
+    const p = posEngagement(f, j, e);
+    j.x = p.x; j.y = p.y; j.vx = j.vy = 0; j.fixe = null;
+  });
+  Object.assign(BAL, {x: CX, y: CY, z: 0, mode: 'mort', eq: e, i: 9, vol: null});
+  ARB.x = CX - 70; ARB.y = CY + 80; ARB.fixe = null;
+}
+function poseRepos(teleporter) {
+  // mi-temps / fin : les joueurs rentrent au vestiaire (tunnel en haut, au centre)
+  for (const e of [0, 1]) J[e].forEach((j, i) => {
+    const p = {x: CX + (e ? 1 : -1) * (20 + (i % 4) * 26), y: Y0 - 2 + Math.floor(i / 4) * 24};
+    j.fixe = p;
+    if (teleporter) { j.x = p.x; j.y = p.y; }
+  });
+  Object.assign(BAL, {x: CX, y: CY, z: 0, mode: 'mort', vol: null});
+  ARB.fixe = {x: CX, y: Y0 + 50};
+}
+
+/* --- tâches différées (en temps du moteur) : annulées d'un coup quand on saute ailleurs --- */
+function tache(d, f) { const j = jeton; taches.push({t: horlogeMoteur + d, f: () => { if (j === jeton) f(); }}); }
+function annuler() {
+  jeton++; taches = []; occupe = false;
+  for (const e of [0, 1]) J[e].forEach(j => j.fixe = null);
+  ARB.fixe = null; $('carte').setAttribute('visibility', 'hidden');
+  if (BAL.vol) { BAL.vol = null; BAL.z = 0; }
+}
+function volBallon(cible, duree, hauteur, apres) {
+  const j = jeton;
+  BAL.mode = 'vol';
+  BAL.vol = {x0: BAL.x, y0: BAL.y, x1: cible.x, y1: cible.y, t0: horlogeMoteur, d: Math.max(.08, duree), h: hauteur,
+             apres: () => { if (j === jeton) apres && apres(); }};
+}
+function donner(e, i) { Object.assign(BAL, {mode: 'pied', eq: e, i, vol: null, z: 0, prochaine: horlogeMoteur + hasard(.35, .9)}); }
+function plusProche(e, p, sansGardien = true) {
+  let best = -1, d = 1e9;
+  J[e].forEach((j, i) => { if (!j.actif || j.sortie || (sansGardien && j.gk)) return; const x = dist(j, p); if (x < d) { d = x; best = i; } });
+  return best;
+}
+function plusAvance(e) {
+  let best = 9, u = -1;
+  J[e].forEach((j, i) => { if (j.actif && !j.sortie && !j.gk && enU(e, j.x) > u) { u = enU(e, j.x); best = i; } });
+  return best;
+}
+
+/* --- jeu courant : conduite, passes, interceptions --- */
+function forceDe(e) { const [a, b] = M.buts_attendus; return (e === 0 ? a : b) / (a + b); }
+function equipeAttendue() {
+  // en lecture, l'équipe qui va tirer, obtenir un corner ou marquer dans les 2 minutes garde plutôt le ballon
+  if (!lecture || modeLu()) return -1;
+  for (let i = iev; i < EV.length && EV[i].tau < T + 2; i++) if ('BSWCP'.includes(EV[i].code) && EV[i].eq >= 0) return EV[i].eq;
+  return -1;
+}
+function passe(e, i) {
+  const r = J[e][i], cible = {x: r.x + sens[e] * 18, y: clamp(r.y, Y0 + 8, Y1 - 8)};
+  const d = dist(BAL, cible);
+  let pInter = clamp(.3 - .22 * forceDe(e), .1, .26);
+  const att = equipeAttendue();
+  if (att === e) pInter *= .35; else if (att === 1 - e) pInter *= 1.9;
+  r.fixe = cible;
+  if (Math.random() < pInter) {
+    const o = 1 - e, k2 = plusProche(o, {x: (BAL.x + cible.x) / 2, y: (BAL.y + cible.y) / 2});
+    const pt = {x: (BAL.x * .35 + cible.x * .65), y: (BAL.y * .35 + cible.y * .65)};
+    J[o][k2].fixe = pt;
+    volBallon(pt, dist(BAL, pt) / 430 + .12, 0, () => { r.fixe = null; J[o][k2].fixe = null; donner(o, k2); });
+  } else {
+    volBallon(cible, d / 430 + .12, d > 300 ? 45 : 0, () => { r.fixe = null; donner(e, i); });
+  }
+}
+function choisirPasse(e, i) {
+  const p = J[e][i], uP = enU(e, p.x);
+  let total = 0;
+  const poids = J[e].map((j, k2) => {
+    if (k2 === i || !j.actif || j.sortie) return 0;
+    const d = dist(j, p);
+    if (d < 50 || d > 420) return 0;
+    let w = Math.exp(3 * (enU(e, j.x) - uP)) * (j.gk ? .15 : 1);
+    if (enU(e, j.x) > .93) w *= .2;
+    total += w; return w;
+  });
+  if (!total) return null;
+  let r = Math.random() * total;
+  for (let k2 = 0; k2 < poids.length; k2++) { r -= poids[k2]; if (r <= 0) return k2; }
+  return null;
+}
+function ia() {
+  if (BAL.mode !== 'pied' || occupe || bloque) return;
+  if (horlogeMoteur < BAL.prochaine) return;
+  const i = choisirPasse(BAL.eq, BAL.i);
+  if (i === null) { BAL.prochaine = horlogeMoteur + .3; return; }
+  passe(BAL.eq, i);
+}
+
+/* --- déplacement : chacun va vers sa cible, à vitesse limitée --- */
+function cible(e, j, t) {
+  if (j.fixe) return j.fixe;
+  if (BAL.mode === 'pied' && BAL.eq === e && J[e][BAL.i] === j) {
+    // le porteur avance vers le but adverse en se recentrant un peu
+    return {x: versX(e, Math.min(enU(e, j.x) + .04, .86)), y: j.y + (CY - j.y) * .15};
+  }
+  const att = BAL.eq === e && BAL.mode !== 'mort', bu = enU(e, BAL.x), bv = enV(e, BAL.y);
+  let u, v;
+  if (j.gk) { u = .025 + clamp((bu - .25) * .08, 0, .06); v = .5 + (bv - .5) * .18; }
+  else {
+    const s = att ? clamp((bu - .3) * .75, -.04, .36) : clamp((bu - .5) * .6, -.14, .2);
+    u = j.u + s + (att && j.u > .45 ? .07 : 0);
+    v = .5 + (j.v - .5) * .92 + (bv - .5) * .28;
+  }
+  u += .012 * Math.sin(t * .9 + j.phase); v += .016 * Math.sin(t * .7 + j.phase * 1.7);
+  return {x: versX(e, clamp(u, .005, .97)), y: versY(e, clamp(v, .03, .97))};
+}
+function deplacer(dt) {
+  const t = horlogeMoteur;
+  // pressing : le défenseur le plus proche va au ballon
+  let presseur = null;
+  if (BAL.mode === 'pied') { const o = 1 - BAL.eq, i = plusProche(o, BAL); if (i >= 0) presseur = J[o][i]; }
+  for (const e of [0, 1]) for (const j of J[e]) {
+    if (!j.actif) continue;
+    let c = cible(e, j, t);
+    if (j === presseur && !j.fixe) c = {x: BAL.x - sens[e] * 12, y: BAL.y};
+    const porteur = BAL.mode === 'pied' && BAL.eq === e && J[e][BAL.i] === j;
+    const vmax = j.sortie ? 45 : (porteur ? 52 : (j.fixe ? 95 : 70));
+    const dx = c.x - j.x, dy = c.y - j.y, d = Math.hypot(dx, dy);
+    const sv = Math.min(vmax, d * 2.2), a = 1 - Math.exp(-dt * 5);
+    j.vx += ((d > .5 ? dx / d * sv : 0) - j.vx) * a; j.vy += ((d > .5 ? dy / d * sv : 0) - j.vy) * a;
+    j.x += j.vx * dt; j.y += j.vy * dt;
+  }
+  // ballon
+  if (BAL.mode === 'vol' && BAL.vol) {
+    const v = BAL.vol, s = clamp((t - v.t0) / v.d, 0, 1), e2 = s * (2 - s);
+    BAL.x = v.x0 + (v.x1 - v.x0) * e2; BAL.y = v.y0 + (v.y1 - v.y0) * e2; BAL.z = v.h * 4 * s * (1 - s);
+    if (s >= 1) { BAL.vol = null; BAL.z = 0; BAL.mode = 'mort'; v.apres(); }
+  } else if (BAL.mode === 'pied') {
+    const p = J[BAL.eq][BAL.i];
+    if (!p || !p.actif) { BAL.mode = 'mort'; }
+    else { BAL.x = p.x + sens[BAL.eq] * 10; BAL.y = p.y + 4; BAL.z = 0; }
+  }
+  // arbitre : suit l'action en diagonale
+  const ca = ARB.fixe || {x: clamp(BAL.x - 70, X0 + 30, X1 - 30), y: clamp(BAL.y + 70, Y0 + 30, Y1 - 30)};
+  const dx = ca.x - ARB.x, dy = ca.y - ARB.y, d = Math.hypot(dx, dy), sv = Math.min(ARB.fixe ? 110 : 60, d * 2);
+  if (d > .5) { ARB.x += dx / d * sv * dt; ARB.y += dy / d * sv * dt; }
+}
+function dessiner() {
+  for (const e of [0, 1]) for (const j of J[e]) if (j.actif)
+    j.el.setAttribute('transform', `translate(${j.x.toFixed(1)},${j.y.toFixed(1)})`);
+  ARB.el.setAttribute('transform', `translate(${ARB.x.toFixed(1)},${ARB.y.toFixed(1)})`);
+  $('ombreBallon').setAttribute('transform', `translate(${(BAL.x + BAL.z * .35).toFixed(1)},${(BAL.y + 5 + BAL.z * .2).toFixed(1)})`);
+  $('balle').setAttribute('transform', `translate(${BAL.x.toFixed(1)},${(BAL.y - BAL.z).toFixed(1)}) scale(${(1 + BAL.z / 70).toFixed(3)})`);
+}
+
+/* ============================== Les actions du match (scripts) ============================== */
+const butAdverse = (e, dy = 0) => ({x: sens[e] > 0 ? X1 + 10 : X0 - 10, y: CY + dy});
+const ligneBut = (e, dy) => ({x: sens[e] > 0 ? X1 - 4 : X0 + 4, y: CY + dy});
+function gardien(e) { return J[e][0]; }
+
+function scriptBut(e, info) {
+  // info : {ev} pour un vrai but, {modele: true} pour un but lu par le modèle
+  annuler(); bloque = true; occupe = true;
+  const o = 1 - e, a = plusAvance(e), att = J[e][a];
+  const penalty = info.ev && dernierPenalty && dernierPenalty.eq === e && info.ev.tau - dernierPenalty.tau < 1.5;
+  const tir = () => {
+    const dy = hasard(-28, 28);
+    gardien(o).fixe = ligneBut(e, -Math.sign(dy || 1) * 26);
+    volBallon(butAdverse(e, dy), .3, 6, () => marquer(e, info));
+  };
+  if (penalty) {
+    const point = {x: versX(e, .885), y: CY};
+    Object.assign(BAL, {x: point.x, y: point.y, z: 0, mode: 'mort', vol: null});
+    att.fixe = {x: point.x - sens[e] * 14, y: CY};
+    tache(.7, tir);
+  } else {
+    const p1 = {x: versX(e, .8), y: versY(e, .5 + hasard(-.12, .12))};
+    att.fixe = p1;
+    volBallon(p1, Math.max(.35, dist(BAL, p1) / 700), 20, () => { att.fixe = null; donner(e, a); tache(.25, tir); });
+  }
+}
+function marquer(e, info) {
+  Object.assign(BAL, {mode: 'mort', vol: null});
+  const filet = $(sens[e] > 0 ? 'filetD' : 'filetG');
+  filet.setAttribute('stroke', C.ligne[e]); setTimeout(() => filet.setAttribute('stroke', '#fff'), 1400);
+  if (info.ev) {
+    scoreVu[e]++;
+    majTableau();
+    ongletTableau(`⚽ But · ${nomEq(e)} · ${minuteTexte(info.ev)}`, C.ligne[e]);
+    annonce('BUT !', `${nomEq(e)} · ${minuteTexte(info.ev)} · vrai score ${sc(scoreVu)}`, C.ligne[e], 2600);
+    majFil();
+    courbe();
+  } else {
+    scoreLu = info.score.slice(); majTableau(); eclat();
+    annonce('BUT ?', `lu dans les commentaires · ${nomEq(e)} · ${sc(info.score)}`, C.ligne[e], 2600);
+  }
+  // célébration près du poteau de corner, les autres rentrent dans leur camp
+  const coin = {x: versX(e, .97), y: BAL.y < CY ? Y0 + 30 : Y1 - 30};
+  actifs(e).forEach((j, i) => { if (!j.gk) j.fixe = {x: coin.x - sens[e] * (i % 3) * 18, y: coin.y + (coin.y < CY ? 1 : -1) * Math.floor(i / 3) * 18}; });
+  actifs(1 - e).forEach(j => { if (!j.gk) j.fixe = {x: versX(1 - e, Math.min(j.u, .4)), y: versY(1 - e, j.v)}; });
+  tache(2.2, () => { for (const f of [0, 1]) J[f].forEach(j => j.fixe = posEngagement(f, j, 1 - e)); });
+  tache(4.2, () => { placerEngagement(1 - e); tache(.4, () => { coupEnvoi(1 - e); bloque = false; occupe = false; }); });
+}
+function coupEnvoi(e) { donner(e, 9); BAL.prochaine = horlogeMoteur; passe(e, 6); }
+
+let dernierPenalty = null;
+function scriptPenalty(e, ev) {
+  dernierPenalty = {eq: e, tau: ev.tau};
+  annuler(); occupe = true;
+  const o = 1 - e, point = {x: versX(e, .885), y: CY};
+  Object.assign(BAL, {x: point.x, y: point.y, z: 0, mode: 'mort', vol: null});
+  for (const f of [0, 1]) actifs(f).forEach((j, i) => {
+    if (j.gk) return;
+    j.fixe = {x: versX(e, .76 - (i % 3) * .02), y: CY + (i - 5) * 22};
+  });
+  const tireur = J[e][plusAvance(e)];
+  tireur.fixe = {x: point.x - sens[e] * 16, y: CY};
+  bandeau('Penalty', `pour ${esc(nomEq(e))}`, C.ligne[e], 3000);
+  const butSuit = EV.some(x => x.code === 'B' && x.eq === e && x.tau >= ev.tau && x.tau - ev.tau < 1.5);
+  if (!butSuit) tache(1.4, () => {   // raté ou arrêté
+    const dy = hasard(-30, 30);
+    gardien(o).fixe = ligneBut(e, dy);
+    volBallon(ligneBut(e, dy), .3, 4, () => { annuler(); donner(o, 0); });
+  });
+}
+function scriptTir(e, cadre) {
+  if (bloque) return;
+  annuler(); occupe = true;
+  const o = 1 - e, a = plusAvance(e), att = J[e][a];
+  const p1 = {x: versX(e, hasard(.72, .8)), y: versY(e, .5 + hasard(-.2, .2))};
+  att.fixe = p1;
+  volBallon(p1, Math.max(.3, dist(BAL, p1) / 700), 15, () => {
+    att.fixe = null; donner(e, a);
+    tache(.2, () => {
+      if (cadre) {
+        const dy = hasard(-30, 30), arrivee = ligneBut(e, dy);
+        gardien(o).fixe = arrivee;
+        volBallon(arrivee, .38, 10, () => { donner(o, 0); gardien(o).fixe = null; BAL.prochaine = horlogeMoteur + .8; occupe = false; });
+      } else {
+        const dy = (Math.random() < .5 ? -1 : 1) * hasard(50, 120);
+        volBallon(butAdverse(e, dy), .45, 30, () => {
+          tache(.5, () => { // six mètres
+            const g = gardien(o); Object.assign(BAL, {x: versX(o, .05), y: CY + hasard(-40, 40), mode: 'mort'});
+            g.x = BAL.x - sens[o] * 12; g.y = BAL.y; donner(o, 0); BAL.prochaine = horlogeMoteur + .6; occupe = false;
+          });
+        });
+      }
+    });
+  });
+}
+function scriptCorner(e) {
+  if (bloque) return;
+  annuler(); occupe = true;
+  const o = 1 - e, haut = BAL.y < CY, coin = {x: versX(e, 1) - sens[e] * 4, y: haut ? Y0 + 4 : Y1 - 4};
+  const tireur = plusProche(e, coin);
+  J[e][tireur].fixe = {x: coin.x - sens[e] * 10, y: coin.y + (haut ? -6 : 6)};
+  volBallon(coin, Math.max(.25, dist(BAL, coin) / 900), 10, () => {
+    actifs(e).forEach((j, i) => { if (!j.gk && J[e].indexOf(j) !== tireur && j.u > .25) j.fixe = {x: versX(e, hasard(.86, .93)), y: versY(e, hasard(.36, .64))}; });
+    actifs(o).forEach(j => { if (!j.gk) j.fixe = {x: versX(e, hasard(.88, .96)), y: versY(e, hasard(.34, .66))}; });
+    tache(1.1, () => {
+      const pt = {x: versX(e, hasard(.88, .93)), y: versY(e, .5 + hasard(-.1, .1))};
+      volBallon(pt, .75, 70, () => {
+        for (const f of [0, 1]) J[f].forEach(j => j.fixe = null);
+        const d = plusProche(o, pt);
+        donner(o, d); BAL.prochaine = horlogeMoteur + .2; occupe = false;
+      });
+    });
+  });
+}
+function scriptTouche(e) {
+  if (occupe || bloque) return;
+  annuler(); occupe = true;
+  const pt = {x: clamp(BAL.x, X0 + 40, X1 - 40), y: BAL.y < CY ? Y0 - 3 : Y1 + 3};
+  const i = plusProche(e, pt);
+  J[e][i].fixe = pt;
+  volBallon(pt, Math.max(.2, dist(BAL, pt) / 900), 0, () => {
+    tache(.6, () => { J[e][i].fixe = null; donner(e, i); BAL.prochaine = horlogeMoteur; occupe = false; });
+  });
+}
+function scriptCoupFranc(e) {
+  if (occupe || bloque) return;
+  annuler(); occupe = true;
+  BAL.mode = 'mort';
+  const i = plusProche(e, BAL);
+  J[e][i].fixe = {x: BAL.x - sens[e] * 12, y: BAL.y};
+  tache(.9, () => { J[e][i].fixe = null; donner(e, i); BAL.prochaine = horlogeMoteur; occupe = false; });
+}
+function scriptCarton(e, code, ev) {
+  annuler(); bloque = true; occupe = true;
+  BAL.mode = 'mort';
+  const i = plusProche(e, BAL), fautif = J[e][i >= 0 ? i : 9];
+  ARB.fixe = {x: fautif.x - 22, y: fautif.y + 6};
+  const rouge = code !== 'J';
+  tache(1.0, () => {
+    const carte = $('carte');
+    carte.setAttribute('fill', rouge ? '#e5202e' : '#ffd54a'); carte.setAttribute('visibility', 'visible');
+    const lib = code === 'J' ? 'Carton jaune' : (code === 'Y' ? 'Deuxième jaune · rouge' : 'Carton rouge');
+    ongletTableau(`<span class="carton" style="background:${rouge ? '#e5202e' : '#ffd54a'}"></span> ${lib} · ${esc(nomEq(e))} · ${minuteTexte(ev)}`, rouge ? '#e5202e' : '#ffd54a', true);
+    if (rouge) { rougesVus[e]++; majTableau(); }
+    majFil();
+  });
+  tache(2.6, () => {
+    $('carte').setAttribute('visibility', 'hidden'); ARB.fixe = null;
+    if (rouge) {
+      fautif.sortie = true; fautif.fixe = {x: fautif.x, y: fautif.y < CY ? Y0 - 40 : Y1 + 40};
+      setTimeout(() => { if (fautif.sortie) { fautif.actif = false; fautif.el.style.display = 'none'; } }, 1800);
+    }
+    donner(1 - e, plusProche(1 - e, BAL)); BAL.prochaine = horlogeMoteur + .3; bloque = false; occupe = false;
+  });
+}
+function declencher(ev) {
+  if (ev.eq < 0 && 'BJRYXPSWCTFO'.includes(ev.code)) return;
+  if (REDUIT) {   // préférence « réduire les animations » : on ne garde que le tableau et les annonces
+    if (ev.code === 'B') { scoreVu[ev.eq]++; ongletTableau(`⚽ But · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, C.ligne[ev.eq]); }
+    else if ('JRY'.includes(ev.code)) {
+      if (ev.code !== 'J') rougesVus[ev.eq]++;
+      ongletTableau(`${ev.code === 'J' ? 'Carton jaune' : 'Carton rouge'} · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, ev.code === 'J' ? '#ffd54a' : '#e5202e', true);
+    } else if (ev.code === 'X') ongletTableau(`🔁 Changement · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, C.ligne[ev.eq]);
+    majTableau(); majFil(); return;
+  }
+  switch (ev.code) {
+    case 'B': scriptBut(ev.eq, {ev}); break;
+    case 'J': case 'R': case 'Y': scriptCarton(ev.eq, ev.code, ev); break;
+    case 'X': ongletTableau(`🔁 Changement · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, C.ligne[ev.eq]); majFil(); break;
+    case 'P': scriptPenalty(ev.eq, ev); break;
+    case 'S': scriptTir(ev.eq, true); break;
+    case 'W': scriptTir(ev.eq, false); break;
+    case 'C': scriptCorner(ev.eq); break;
+    case 'T': scriptTouche(ev.eq); break;
+    case 'F': scriptCoupFranc(ev.eq); break;
+    case 'O': scriptCoupFranc(1 - ev.eq); break;
+  }
+}
+
+/* ============================== Incrustations ============================== */
+let minuteurOnglet = null, minuteurAnnonce = null, minuteurBandeau = null;
+function ongletTableau(html, couleur, sombre) {
+  const o = $('onglet');
+  o.innerHTML = html; o.style.background = couleur; o.style.color = sombre ? '#111' : texteSur(couleur);
+  if (sombre && couleur === '#e5202e') o.style.color = '#fff';
+  o.hidden = false; o.style.animation = 'none'; void o.offsetWidth; o.style.animation = '';
+  clearTimeout(minuteurOnglet); minuteurOnglet = setTimeout(() => o.hidden = true, 4200);
+}
+function annonce(gros, petit, couleur, duree) {
+  $('annonceGros').textContent = gros; $('annoncePetit').textContent = petit;
+  const b = $('annonceBoite'); b.style.background = couleur; b.style.color = texteSur(couleur);
+  $('annonce').hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+  clearTimeout(minuteurAnnonce); if (duree) minuteurAnnonce = setTimeout(() => $('annonce').hidden = true, duree);
+}
+function cacherAnnonce() { clearTimeout(minuteurAnnonce); $('annonce').hidden = true; }
+function bandeau(tag, html, couleur, duree = 6000) {
+  $('bandeauTag').textContent = tag; $('bandeauTag').style.background = couleur || 'var(--jaune)';
+  $('bandeauTag').style.color = texteSur(couleur || '#ffd54a');
+  $('bandeauTxt').innerHTML = html;
+  const b = $('bandeau'); b.hidden = false; b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+  clearTimeout(minuteurBandeau); minuteurBandeau = setTimeout(() => b.hidden = true, duree);
+}
+function cacherIncrustations() {
+  cacherAnnonce(); clearTimeout(minuteurBandeau); clearTimeout(minuteurOnglet);
+  $('bandeau').hidden = true; $('onglet').hidden = true;
+}
+
+/* ============================== Lecture ============================== */
+let dernier = performance.now();
+function etape(dtr) {   // une image : dtr secondes réelles
+  const dt = REDUIT ? 0 : dtr * VIT_MOTEUR[vit];
+  horlogeMoteur += dtr * VIT_MOTEUR[vit];
+  if (lecture && !bloque) avancer(dtr);
+  const pretes = taches.filter(x => x.t <= horlogeMoteur);
+  taches = taches.filter(x => x.t > horlogeMoteur);
+  pretes.forEach(x => x.f());
+  if (!REDUIT) { ia(); deplacer(dt); }
+  dessiner();
+}
+function boucle(maintenant) {
+  const dtr = Math.min(.05, (maintenant - dernier) / 1000); dernier = maintenant;
+  if (M) etape(dtr);
+  requestAnimationFrame(boucle);
+}
+function avancer(dtr) {
+  let nT = T + dtr / SEC_PAR_MINUTE[vit];
+  if (T < TP[5] && nT >= TP[5]) nT = TP[5];
+  if (nT >= TP[11]) nT = TP[11];
+  T = nT;
+  if (!modeLu()) {
+    while (iev < EV.length && EV[iev].tau <= T) { declencher(EV[iev++]); if (bloque) break; }
+  } else while (iev < EV.length && EV[iev].tau <= T) iev++;
+  if (bloque) { majHorloge(); return; }
+  while (k < 11 && TP[k + 1] <= T) { k++; nouveauPoint(); if (bloque) break; }
+  if (!bloque && phase === 1 && T >= TP[5]) miTemps();
+  else if (!bloque && T >= TP[11]) finDuMatch();
+  majHorloge();
+  if (Math.abs(T - tCourbe) > .1) courbe();
+}
+let tCourbe = -1;
+function nouveauPoint() {
+  majPanneau();
+  const pt = M.points[k], avant = M.points[k - 1];
+  if (!avant) return;
+  const d = [pt.cour[0] - avant.cour[0], pt.cour[1] - avant.cour[1]];
+  if (d[0] === 0 && d[1] === 0) return;
+  const dernierBut = pt.buts[pt.buts.length - 1];
+  const extraitTxt = dernierBut ? ` · <q>${esc(dernierBut.cite ? dernierBut.cite.texte : dernierBut.texte)}</q>` : '';
+  bandeau('Le modèle lit', `<b>${sc(pt.cour)}</b>${extraitTxt}`);
+  // en mode suspense, le terrain rejoue le but tel que le modèle le lit ; sinon le gros score change tout de suite
+  if (modeLu() && lecture && !REDUIT && (d[0] > 0 || d[1] > 0)) scriptBut(d[0] > 0 ? 0 : 1, {modele: true, score: pt.cour.slice()});
+  else { scoreLu = pt.cour.slice(); majTableau(); eclat(); }
+}
+function miTemps() {
+  phase = 2; bloque = true; annuler(); occupe = true;
+  annonce('MI-TEMPS', `lu par le modèle ${sc(scoreLu)}${modeLu() ? '' : ` · vrai score ${sc(scoreVu)}`}`, '#e8edf3', 0);
+  poseRepos(false);
+  majHorloge();
+  tache(2.8, () => {
+    cacherAnnonce(); T = 100; sens = [-1, 1];
+    placerEngagement(1 - engageur);
+    tache(.6, () => { coupEnvoi(1 - engageur); bloque = false; occupe = false; });
+  });
+}
+function finDuMatch() {
+  lecture = false; finale = true; annuler(); occupe = true; bloque = false;
+  $('play').textContent = '▶'; $('play').setAttribute('aria-label', 'Lecture');
+  const cache = $('suspense').checked;
+  scoreLu = M.points[11].cour.slice();
+  if (!M.reel) scoreVu = M.final.slice();
+  majTableau(); majPanneau();
+  annonce('FIN DU MATCH', `lu par le modèle ${sc(scoreLu)}${cache ? '' : ` · vrai score ${sc(M.final)}`}`, '#e8edf3', 0);
+  poseRepos(false);
+}
+function lancer() {
+  if (k >= 11) aller(0);
+  cacherAnnonce();
+  lecture = true; $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', 'Pause');
+  if (k === 5 && T < 100) { phase = 1; miTemps(); }
+  else if (k === 0 && T === 0) { placerEngagement(engageur); tache(.4, () => coupEnvoi(engageur)); }
+}
+function arreter() { lecture = false; $('play').textContent = '▶'; $('play').setAttribute('aria-label', 'Lecture'); }
+
+function aller(i, annoncer = false) {
+  arreter(); annuler(); bloque = false; finale = false; dernierPenalty = null;
+  cacherIncrustations();
+  const avant = k, demiAvant = T >= 100;
+  k = i; T = TP[i]; phase = i >= 6 ? 2 : 1;
+  iev = EV.findIndex(x => x.tau >= T); if (iev < 0) iev = EV.length;
+  scoreLu = M.points[i].cour.slice();
+  scoreVu = M.reel ? M.reel[i].slice() : (i === 11 ? M.final.slice() : null);
+  rougesVus = [0, 0];
+  if (!modeLu()) EV.forEach(x => { if ('RY'.includes(x.code) && x.tau < T && x.eq >= 0) rougesVus[x.eq]++; });
+  appliquerRouges(rougesVus);
+  sens = phase === 2 ? [-1, 1] : [1, -1];
+  if (i === 5 || i === 11) { poseRepos(true); if (i === 11) finale = true; }
+  else if (i === 0 || i === 6 || demiAvant !== (T >= 100) || avant === 5 || avant === 11) {
+    placerEngagement(i === 6 ? 1 - engageur : engageur);
+    if (i !== 0) tache(.4, () => coupEnvoi(BAL.eq));
+  } else if (BAL.mode !== 'pied') donner(BAL.eq, plusProche(BAL.eq, BAL));   // le jeu reprend là où il était
+  majTableau(); majHorloge(); majPanneau();
+  if (annoncer && i === avant + 1) {
+    if (!modeLu() && M.reel) {
+      const d = [M.reel[i][0] - M.reel[avant][0], M.reel[i][1] - M.reel[avant][1]];
+      const e = d[0] > 0 ? 0 : (d[1] > 0 ? 1 : -1);
+      if (e >= 0) {
+        const buts = EV.filter(x => x.code === 'B' && x.eq === e && x.tau < T && x.tau >= TP[avant]);
+        annonce('BUT !', `${nomEq(e)}${buts.length ? ' · ' + buts.map(minuteTexte).join(', ') : ''} · vrai score ${sc(M.reel[i])}`, C.ligne[e], 2200);
+      }
+    }
+    const pt = M.points[i], pa = M.points[avant];
+    if (pt.cour[0] !== pa.cour[0] || pt.cour[1] !== pa.cour[1]) {
+      const b = pt.buts[pt.buts.length - 1];
+      bandeau('Le modèle lit', `<b>${sc(pt.cour)}</b>${b ? ` · <q>${esc(b.cite ? b.cite.texte : b.texte)}</q>` : ''}`);
+    }
+  }
+}
+
+/* ============================== Affichage ============================== */
+function eclat() {   // le gros score clignote quand le modèle change d'avis
+  if (REDUIT) return;
+  const b = $('tScore'); b.classList.remove('eclat'); void b.offsetWidth; b.classList.add('eclat');
+}
+function majHorloge() {
+  const h = horloge();
+  $('tHorloge').textContent = h.txt;
+  $('tAdd').textContent = h.add; $('tAdd').hidden = !h.add;
+}
+function majTableau() {
+  // en gros : ce que le modèle lit dans les commentaires ; en petit : le vrai score (caché en mode suspense)
+  const cache = $('suspense').checked;
+  $('sDom').textContent = scoreLu[0]; $('sExt').textContent = scoreLu[1];
+  $('rDom').innerHTML = '<i></i>'.repeat(modeLu() ? 0 : rougesVus[0]);
+  $('rExt').innerHTML = '<i></i>'.repeat(modeLu() ? 0 : rougesVus[1]);
+  const fin = k === 11 || finale;
+  $('tLuLib').textContent = !M.reel && fin && !cache ? 'Vrai score final' : 'Vrai score';
+  $('tLu').textContent = cache ? 'caché' : (scoreVu ? sc(scoreVu) : 'inconnu');
+}
+function majPanneau() {
+  const pt = M.points[k], nom = D.points[k], fin = k === 11, cache = $('suspense').checked;
+  document.querySelectorAll('#frise button').forEach((b, i) => {
+    b.classList.toggle('actif', i === k); b.classList.toggle('passe', i < k);
+    b.setAttribute('aria-current', i === k ? 'step' : 'false');
+  });
+  $('titrePoint').textContent = k === 0 ? 'Avant le coup d\'envoi' : (nom === 'Mi-temps' ? 'Prédiction à la mi-temps' : (fin ? 'Prédiction au coup de sifflet final' : `Prédiction à ${nom}`));
+  const noms = [M.dom.nom, 'Match nul', M.ext.nom], coul = [C.ligne[0], '#9aa5a0', C.ligne[1]];
+  $('chances').innerHTML = pt.p.map((v, i) => `<div class="chance"><span class="nom">${esc(noms[i])}</span>
+      <span class="val">${pct(v)}</span><div class="jauge"><span style="width:${v * 100}%;background:${coul[i]}"></span></div></div>`).join('');
+  $('prono').innerHTML = `<span style="color:${C.ligne[0]}">${pt.prono[0]}</span> – <span style="color:${C.ligne[1]}">${pt.prono[1]}</span>`;
+  $('final').textContent = cache ? '? – ?' : sc(M.final);
+  const issue = Math.sign(M.final[0] - M.final[1]);
+  const fav = [1, 0, -1][pt.p.indexOf(Math.max(...pt.p))];
+  const exact = pt.prono[0] === M.final[0] && pt.prono[1] === M.final[1];
+  $('verdict').innerHTML = cache ? '' : (exact ? '<span class="bon">✔ Score exact</span>'
+    : fav === issue ? '<span class="bon">✔ Bon vainqueur</span> · score différent' : '<span class="mauvais">✘ Mauvais vainqueur</span>');
+  $('lecture').innerHTML = k === 0
+    ? `Rien n'est encore dit. Les chances viennent de la force des équipes, estimée par un filtre de Kalman sur leurs matchs précédents (buts par match de plus qu'une équipe moyenne) : ${esc(M.dom.nom)} <b>${signe(M.force[0][0])} ± ${fr1(M.force[0][1])}</b>, ${esc(M.ext.nom)} <b>${signe(M.force[1][0])} ± ${fr1(M.force[1][1])}</b>, avantage du terrain <b>${signe(M.terrain)}</b>. Soit <b>${fr1(M.buts_attendus[0])} – ${fr1(M.buts_attendus[1])}</b> buts attendus.`
+    : `Le modèle a lu <b>${sc(pt.cour)}</b> dans les commentaires (sûr à ${pct(pt.conf)}). Il reste environ <b>${pct(pt.part_restante)}</b> des buts d'un match à marquer.`;
+  majFil();
+  courbe();
+}
+function majFil() {
+  const pt = M.points[k], cache = $('suspense').checked;
+  $('ongletLu').setAttribute('aria-selected', vue === 'lu'); $('ongletVrai').setAttribute('aria-selected', vue === 'vrai');
+  if (vue === 'lu') {
+    $('fil').innerHTML = pt.buts.length ? pt.buts.map(b => {
+      const c = C.ligne[b.equipe === 'dom' ? 0 : 1];
+      const annonceTxt = b.q >= .5 ? `annonce claire (${pct(b.q)})` : `annonce peu claire (${pct(b.q)})`;
+      // même passage que l'annonce : inutile de le citer deux fois
+      const meme = b.cite && (b.texte.includes(b.cite.texte.replace(/ …$/, '').slice(0, 60)) || b.cite.texte.includes(b.texte.replace(/ …$/, '').slice(0, 60)));
+      const appui = !b.cite ? '' : meme ? `<span class="appui">✔ le passage cite le score « ${esc(b.cite.score)} »</span>`
+        : `<span class="appui">✔ confirmé à ${esc(b.cite.minute)} par le score cité « ${esc(b.cite.score)} » : <q>${esc(b.cite.texte)}</q></span>`;
+      return `<li><span class="min">${esc(b.minute)}</span><div><span class="qui" style="color:${c}">⚽ But ${esc(b.equipe === 'dom' ? M.dom.nom : M.ext.nom)}</span>
+        <span class="note">· compté à ${pct(b.proba)} · ${annonceTxt}</span><q>${esc(b.texte)}</q>${appui}</div></li>`;
+    }).join('') : `<li><span class="min">—</span><div class="note">${k === 0 ? 'Le match commence : rien n\'a encore été dit.' : 'Le modèle n\'a compté aucun but pour l\'instant.'}</div></li>`;
+    return;
+  }
+  if (!M.evenements) { $('fil').innerHTML = '<li><span class="min">—</span><div class="note">Ce match n\'est pas annoté par SoccerNet : on ne connaît que le score final.</div></li>'; return; }
+  if (cache) { $('fil').innerHTML = '<li><span class="min">—</span><div class="note">Mode suspense : le vrai déroulement est caché.</div></li>'; return; }
+  const vus = EV.filter(x => 'BJRYX'.includes(x.code) && x.eq >= 0 && x.tau <= T && (lecture || x.tau < T || k === 11));
+  const icone = x => x.code === 'B' ? '⚽' : x.code === 'X' ? '🔁' : `<span class="carton" style="background:${x.code === 'J' ? '#ffd54a' : '#e5202e'}"></span>`;
+  const lib = {B: 'But', J: 'Carton jaune', R: 'Carton rouge', Y: 'Deuxième jaune, exclu', X: 'Changement'};
+  $('fil').innerHTML = vus.length ? vus.slice().reverse().map(x => `<li><span class="min">${minuteTexte(x)}</span><div>
+      <span class="${x.code === 'B' ? 'qui' : ''}" style="color:${x.code === 'B' ? C.ligne[x.eq] : 'var(--txt)'}">${icone(x)} ${lib[x.code]} · ${esc(nomEq(x.eq))}</span></div></li>`).join('')
+    : '<li><span class="min">—</span><div class="note">Rien à signaler pour l\'instant.</div></li>';
+}
+function xDuTemps(tau, x) {
+  // position d'un instant sur l'axe des points de contrôle
+  if (tau <= 0) return x(0);
+  for (let i = 0; i < 11; i++) {
+    let a = TP[i], b = TP[i + 1];
+    if (i === 5) { if (tau < 100) return x(5); a = 100; }
+    if (tau <= b) return x(i) + (x(i + 1) - x(i)) * clamp((tau - a) / (b - a), 0, 1);
+  }
+  return x(11);
+}
+function courbe() {
+  tCourbe = T;
+  const W = 620, H = 270, g = 44, d = 14, h = 22, b = 30, n = D.points.length;
+  const x = i => g + i * (W - g - d) / (n - 1), y = v => h + (1 - v) * (H - h - b);
+  const coul = [C.ligne[0], '#9aa5a0', C.ligne[1]];
+  let s = '';
+  for (const v of [0, .25, .5, .75, 1]) {
+    s += `<line x1="${g}" x2="${W - d}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v === 0 ? .35 : .12})"/>`;
+    s += `<text x="${g - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#b3c2ba">${v * 100}%</text>`;
+  }
+  D.points.forEach((p, i) => s += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="${i <= k ? '#f4f7f5' : '#b3c2ba'}">${p === 'Mi-temps' ? 'MT' : p}</text>`);
+  const xt = xDuTemps(T, x);
+  s += `<rect x="${xt}" y="${h}" width="${Math.max(0, W - d - xt)}" height="${H - h - b}" fill="rgba(0,0,0,.2)"/>`;
+  // vrais buts (sauf en mode suspense)
+  if (!modeLu()) EV.forEach(ev => {
+    if (ev.code !== 'B' || ev.eq < 0 || ev.tau > T || (!lecture && ev.tau >= T && k !== 11)) return;
+    const xx = xDuTemps(ev.tau, x);
+    s += `<line x1="${xx}" x2="${xx}" y1="${h}" y2="${H - b}" stroke="${C.ligne[ev.eq]}" stroke-opacity=".55" stroke-width="1.5"/>`;
+    s += `<text x="${xx}" y="${h - 6}" text-anchor="middle" font-size="12">⚽</text>`;
+  });
+  s += `<line x1="${xt}" x2="${xt}" y1="${h}" y2="${H - b}" stroke="#ffd54a" stroke-dasharray="4 4"/>`;
+  for (let j = 0; j < 3; j++) {
+    const pts = M.points.slice(0, k + 1).map((pt, i) => `${x(i)},${y(pt.p[j])}`).join(' ');
+    s += `<polyline points="${pts}" fill="none" stroke="${coul[j]}" stroke-width="3" ${j === 1 ? 'stroke-dasharray="7 5"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`;
+    s += `<circle cx="${x(k)}" cy="${y(M.points[k].p[j])}" r="5" fill="${coul[j]}" stroke="#0b1410" stroke-width="2"/>`;
+  }
+  $('courbe').innerHTML = s;
+}
+
+/* ============================== Choix du match ============================== */
+function remplir() {
+  const c = $('comp').value;
+  const liste = D.matchs.filter(m => m.competition + ' · ' + m.saison === c);
+  $('match').innerHTML = liste.map(m => `<option value="${esc(m.id)}">${esc(m.date)} · ${esc(m.dom.nom)} – ${esc(m.ext.nom)}</option>`).join('');
+}
+function choisir() {
+  M = D.matchs.find(m => m.id === $('match').value);
+  TP = tempsDesPoints(M);
+  EV = (M.evenements || []).map(([mt, t, code, eq]) => ({mt, t, code, eq, tau: tauDe(mt, t)}));
+  engageur = (EV.find(x => x.code === 'K' && x.mt === 1 && x.eq >= 0) || {eq: 0}).eq;
+  C = teintes(M);
+  creerJoueurs();
+  $('tComp').textContent = COMP_COURT[M.competition] || M.competition.slice(0, 3).toUpperCase();
+  $('cDom').textContent = M.dom.code; $('cExt').textContent = M.ext.code;
+  $('kDom').innerHTML = `<i style="background:${M.dom.c1}"></i><i style="background:${M.dom.c2}"></i>`;
+  $('kExt').innerHTML = `<i style="background:${M.ext.c1}"></i><i style="background:${M.ext.c2}"></i>`;
+  $('infoMatch').textContent = `${M.dom.nom} – ${M.ext.nom} · ${M.competition} · ${M.date}`;
+  $('legende').innerHTML = [[M.dom.nom, C.ligne[0]], ['Match nul', '#9aa5a0'], [M.ext.nom, C.ligne[1]]]
+    .map(([n, c]) => `<span><span class="pastille" style="background:${c}"></span>${esc(n)}</span>`).join('');
+  $('noteEcran').textContent = M.evenements ? 'Joueurs : illustration rejouant les actions annotées' : 'Match sans annotation : jeu illustratif, score réel connu à la fin';
+  try { history.replaceState(null, '', '#' + encodeURIComponent(M.id)); } catch (e) {}
+  aller(0);
+}
+function selectionner(m) { $('comp').value = m.competition + ' · ' + m.saison; remplir(); $('match').value = m.id; choisir(); }
+
+function fiabilite() {
+  const ev = D.evaluation, ei = D.evaluation_inedits;
+  $('repere').textContent = pct(D.repere_domicile ?? 0.49);
+  $('tabFiab').innerHTML = '<tr><th>Moment</th><th>Bon résultat</th><th>Log loss</th><th>Score final exact</th><th>Score courant exact</th><th>Bon résultat (matchs jamais annotés)</th></tr>' +
+    ev.map((e, i) => `<tr><td>${e.point}</td><td>${pct(e.bon_resultat)}</td><td>${e.log_loss.toFixed(3)}</td><td>${pct(e.score_final_exact)}</td>` +
+      `<td>${e.score_courant_exact == null ? '—' : pct(e.score_courant_exact)}</td><td>${pct(ei[i].bon_resultat)}</td></tr>`).join('');
+  $('noteFiab').textContent = `${D.nb_annotes} matchs annotés (validation croisée) et ${D.nb_inedits} matchs jamais annotés (test à part). ` +
+    'La log loss mesure la justesse des probabilités (plus bas = mieux). Avec ces effectifs, les pourcentages sont connus à ± 3 points (± 8 pour les matchs jamais annotés).' +
+    (D.comparaison_force ? ` Au coup d'envoi, la force des équipes vient d'un filtre de Kalman : ${pct(D.comparaison_force[0]['bon vainqueur (annotés)'])} de bons vainqueurs, contre ${pct(D.comparaison_force[1]['bon vainqueur (annotés)'])} avec un Elo classique.` : '');
+}
+
+function init() {
+  const comps = [...new Set(D.matchs.map(m => m.competition + ' · ' + m.saison))].sort();
+  $('comp').innerHTML = comps.map(c => `<option>${esc(c)}</option>`).join('');
+  $('frise').innerHTML = D.points.map((p, i) => `<button type="button" data-i="${i}">${p === 'Mi-temps' ? 'MT' : p}</button>`).join('');
+  $('frise').onclick = e => { const b = e.target.closest('button'); if (b) aller(+b.dataset.i, +b.dataset.i === k + 1); };
+  $('comp').onchange = () => { remplir(); choisir(); };
+  $('match').onchange = choisir;
+  $('hasard').onclick = () => { const l = D.matchs.filter(m => m.reel); selectionner(l[Math.floor(Math.random() * l.length)]); };
+  $('prec').onclick = () => aller(Math.max(0, k - 1));
+  $('suiv').onclick = () => aller(Math.min(11, k + 1), true);
+  $('play').onclick = () => lecture ? arreter() : lancer();
+  $('vitesse').onchange = () => vit = +$('vitesse').value;
+  vit = +$('vitesse').value;
+  $('suspense').onchange = () => aller(k);
+  $('ongletLu').onclick = () => { vue = 'lu'; majFil(); };
+  $('ongletVrai').onclick = () => { vue = 'vrai'; majFil(); };
+  $('fiab').onclick = () => { $('modale').hidden = false; $('fermer').focus(); };
+  $('fermer').onclick = () => $('modale').hidden = true;
+  $('modale').onclick = e => { if (e.target.id === 'modale') $('modale').hidden = true; };
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') $('modale').hidden = true;
+    if (['SELECT', 'INPUT'].includes(e.target.tagName)) return;
+    if (e.key === 'ArrowRight') $('suiv').click();
+    if (e.key === 'ArrowLeft') $('prec').click();
+    if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+  });
+  fiabilite();
+  // match d'ouverture : celui de l'adresse, sinon un match annoté typique (plusieurs buts, un carton, pronostic juste à la fin)
+  const voulu = decodeURIComponent(location.hash.slice(1));
+  const fini = m => m.points[11].prono;
+  const depart = D.matchs.find(m => m.id === voulu)
+    || D.matchs.find(m => m.reel && m.final[0] + m.final[1] >= 3 && m.final[0] !== m.final[1]
+         && fini(m)[0] === m.final[0] && fini(m)[1] === m.final[1] && m.points[11].buts.length === m.final[0] + m.final[1]
+         && (m.evenements || []).some(x => x[2] === 'J'))
+    || D.matchs[0];
+  selectionner(depart);
+  if (/[?&]lecture=1/.test(location.search)) lancer();
+  requestAnimationFrame(boucle);
+}
+
+if (D) init();
+else document.body.insertAdjacentHTML('beforeend', '<p style="position:fixed;top:40%;left:0;right:0;text-align:center;z-index:9">Lance <code>python direct.py</code> pour générer la page.</p>');
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+__pycache__/
+.DS_Store
+cache/
+SoccerNet/
+resultats/
+# Données brutes (85 Mo), à télécharger depuis Hugging Face (voir README)
+echoes_brut.csv
