@@ -1,39 +1,11 @@
 """
 Détecter les buts dans les commentaires sans se faire piéger par le double sens de « goal ».
-
-Le piège : « goal » désigne aussi bien le but marqué (« Goal! Goal for Real Madrid! ») que la cage
-(« the ball goes wide of Courtois's goal », « shot on goal », « goal kick »). Sur un match, le mot apparaît en
-moyenne 44 fois pour à peine plus de 3 vrais buts.
-
-Démarche :
-1. Mentions : chaque mot qui peut annoncer un but (goal, scores, nets, equaliser, un score cité « 1-0 »), et des
-   tournures qui le trahissent sans ces mots (« the ball is in », « takes the lead », « goes crazy », « scorer »).
-2. Entités : grâce aux compositions officielles, les noms propres deviennent <gardien>, <joueur> ou <equipe>.
-   « Courtois's goal » devient « <gardien> _poss_ goal » : la cage d'un gardien, quel que soit le match.
-3. Sens de chaque mention (étape 1) : annonce d'un but qui vient d'être marqué, ou autre chose (cage, rappel
-   d'un but passé, statistique, hypothèse, but refusé...). Régression logistique sur le contexte (mots à
-   gauche et à droite, entités, ponctuation, densité de mentions autour) et sur la lecture du passage par un
-   modèle de langue pré-entraîné (DistilRoBERTa, de la famille de BERT), à qui l'on donne le texte avec les
-   rôles en clair (« goalkeeper 's goal »). Elle est entraînée avec les annotations officielles SoccerNet :
-   une mention prononcée juste après un vrai but est une annonce, une mention loin de tout but n'en est pas une.
-4. Vérification de chaque but candidat (étape 2) : les annonces proches dans le temps forment un candidat. Un
-   vrai but déclenche une rafale (annonces répétées, score cité, exclamations) ; une phrase isolée du genre
-   « he wants to score a goal » non. Un second modèle juge la rafale entière.
-5. Score du match : les buts candidats et les scores cités par les commentateurs sont lus dans l'ordre. Le
-   score le plus probable en découle : un score cité confirme ou corrige le compte des buts, selon sa
-   fiabilité, estimée par un troisième modèle d'après ses mots voisins (« scores 0-1 » est fiable,
-   « 4-3-3 » ou « 3-1 last season » non).
-
-Pour mesurer ce qu'apporte chaque idée, on compare avec une approche naïve (toute mention est un but) et
-avec des règles écrites à la main (« on goal », « goal kick », « <gardien>'s goal », « no goal »...).
-
-Évaluation en validation croisée par match : un match n'est jamais évalué par un modèle qui l'a vu.
-
 Usage (environnement conda nlp-foot, dans le dossier du projet) :
-    python detection_buts.py
+    python detection_buts_2.py
 """
 import hashlib
 import os
+import pickle
 import re
 
 import numpy as np
@@ -51,30 +23,27 @@ import donnees
 DOSSIER_RESULTATS = os.path.join(donnees.ICI, "resultats")
 N_PLIS = 5
 SEED = 42
-FENETRE = 8                  # mots de contexte de chaque côté d'une mention
-FENETRE_TEXTE = 24           # contexte plus large, en mots naturels, pour le modèle de langue
+FENETRE = 8                  # mots de contexte de chaque côté d'une mention[cite: 6]
+FENETRE_TEXTE = 24           # contexte plus large, en mots naturels, pour le modèle de langue[cite: 6]
 EN_CLAIR = {"<gardien>": "goalkeeper", "<joueur>": "player", "<equipe>": "team", "<autre_equipe>": "another team",
             "_poss_": "'s"}
-REGROUPEMENT = 2.5           # minutes : deux annonces plus proches que ça décrivent le même but
-TOLERANCE = (-1.0, 2.5)      # un but détecté entre 1 min avant et 2 min 30 après le vrai but est correct
+REGROUPEMENT = 2.5           # minutes : deux annonces plus proches que ça décrivent le même but[cite: 6]
+TOLERANCE = (-1.0, 2.5)      # un but détecté entre 1 min avant et 2 min 30 après le vrai but est correct[cite: 6]
 MAX_BUTS = 10
-POIDS_SCORE_CITE = 0.5       # un score cité compte pour moitié : les commentateurs se répètent
-MODELE_LANGUE = "distilroberta-base"   # modèle de langue pré-entraîné (None pour s'en passer)
-POIDS_LANGUE = 0.15          # poids de ses vecteurs à côté des mots typés
+POIDS_SCORE_CITE = 0.5       # un score cité compte pour moitié : les commentateurs se répètent[cite: 6]
+MODELE_LANGUE = "distilroberta-base"   # modèle de langue pré-entraîné (None pour s'en passer)[cite: 6]
+POIDS_LANGUE = 0.15          # poids de ses vecteurs à côté des mots typés[cite: 6]
 FICHIER_REPRESENTATIONS = os.path.join(donnees.ICI, "cache", "representations_langue.npz")
+CACHE_CV = os.path.join(donnees.ICI, "cache", "cv_detection_buts_v2.pkl")
 
-# Familles de mots qui peuvent annoncer un but
+# Familles de mots qui peuvent annoncer un but[cite: 6]
 FAMILLES = [
-    ("goal", re.compile(r"^go+a+l+s?$")),            # goal, goals, gooooal
+    ("goal", re.compile(r"^go+a+l+s?$")),            # goal, goals, gooooal[cite: 6]
     ("marquer", re.compile(r"^scor(?:e|es|ed|ing)$")),
     ("filet", re.compile(r"^net(?:s|ted)?$")),
     ("egaliser", re.compile(r"^equali[sz]\w*$")),
-    ("score cité", re.compile(r"^_score_$")),        # « 1-0 », « 2:1 »
+    ("score cité", re.compile(r"^_score_$")),        # « 1-0 », « 2:1 »[cite: 6]
 ]
-# Tournures de plusieurs mots qui trahissent un but sans les mots ci-dessus (« And the ball is in. Giroud.
-# Now the stadium is going crazy »). Lues sur le texte tokenisé (« it's » -> « it _poss_ »), ancrées sur leur
-# dernier mot. Retenues parce qu'elles tombent bien plus souvent que le hasard dans les 3 min qui suivent un
-# vrai but (fête 48 %, avance 36 %, buteur 25 %, dedans 21 à 31 %, placement 14 %, contre 11 % au hasard).
 TOURNURES = [
     ("dedans", re.compile(
         r"\b(?:ball|it|that|shot|header) (?:is|_poss_|was|goes|went|rolls|flies|ends up|slides|creeps) (?:in|inside)\b"
@@ -93,11 +62,15 @@ TOURNURES = [
         r"\b(?:celebrat\w*|jubil\w*|erupts?|erupted|explodes?|exploded|delirium|euphori\w*|ecsta\w*"
         r"|(?:going|goes|go|went) (?:crazy|wild|mad|berserk))\b")),
 ]
-FAMILLES_MOTS = [nom for nom, _ in FAMILLES]     # les approches de comparaison ne voient que ces mots-clés
-# « 2-1 », « 2:1 » mais pas les schémas tactiques « 4-3-3 » ni les heures « 20:45 »
+FAMILLES_MOTS = [nom for nom, _ in FAMILLES]
 RE_SCORE = re.compile(r"(?<![\d.:/,\-–])(\d)\s*(?:[-–:]|\bto\b)\s*(\d)(?![\d]|[.:/,]\d|\s*[-–]\s*\d)")
+# Détection des buts contre son camp (own goal) pour inverser l'attribution de l'équipe
+RE_CSC = re.compile(
+    r"\b(?:own goals?|own net|into (?:his|their) own|in (?:his|their) own|past (?:his|their) own keeper"
+    r"|deflected into (?:his|their) own|unfortunate (?:deflection|touch) into)\b",
+    re.IGNORECASE,
+)
 
-# Règles écrites à la main (approche de comparaison, et indices pour le modèle)
 AVANT_CAGE = {"on", "at", "towards", "toward", "in", "inside", "near", "from", "across", "wide", "over",
               "defend", "defends", "defending", "guard", "guards", "guarding", "protect", "protects", "front",
               "attack", "attacking", "approaching", "approaches"}
@@ -108,11 +81,9 @@ RETRO = {"season", "seasons", "career", "year", "years", "week", "weeks", "previ
 
 
 # ----------------------------------------------------------------------------
-# 1. Mots, entités et mentions
+# 1. Mots, entités et mentions[cite: 6]
 # ----------------------------------------------------------------------------
 def tokeniser(texte):
-    """« Courtois's goal! 1-0 » -> (['courtois', '_poss_', 'goal', '!', '_score_'], [(1, 0)])
-    Renvoie les mots et, dans l'ordre, la valeur de chaque score cité."""
     t = donnees.normaliser(str(texte).replace("’", "'"))
     valeurs = [(int(a), int(b)) for a, b in RE_SCORE.findall(t)]
     t = RE_SCORE.sub(" _score_ ", t)
@@ -122,8 +93,6 @@ def tokeniser(texte):
 
 
 def dictionnaire_entites(compo, autres_equipes):
-    """mot -> (type, côté). Ex. 'courtois' -> ('<gardien>', 'dom'). Les noms des équipes qui ne jouent pas ce
-    match deviennent <autre_equipe> (« More goals in other fields… Real Sociedad scored »)."""
     ent = {mot: ("<autre_equipe>", None) for mot in autres_equipes}
     for cote in ("dom", "ext"):
         for cle, typ in (("equipe", "<equipe>"), ("joueurs", "<joueur>"), ("gardien", "<gardien>")):
@@ -140,8 +109,6 @@ def famille(mot):
 
 
 def regle(g, d, mot, fam):
-    """Tournure qui exclut une annonce de but, d'après les mots typés à gauche (le plus proche d'abord)
-    et à droite. Renvoie le nom de la règle, ou None."""
     g1, g2, g3 = (g + ["", "", ""])[:3]
     d1, d2, d3 = (d + ["", "", ""])[:3]
     proches = set(g[:6] + d[:6])
@@ -162,8 +129,6 @@ def regle(g, d, mot, fam):
 
 
 def extraire_mentions(com, compos):
-    """Une ligne par mention, avec son contexte. Le contexte traverse les segments : Whisper coupe souvent
-    une phrase en deux (« the ball goes to Courtois's » / « goal »)."""
     lignes = []
     toutes_equipes = {mot for c in compos.values() for cote in c.values() for mot in cote["equipe"]}
     for (match, mt), seg in com.groupby(["match", "mi_temps"], sort=False):
@@ -175,7 +140,7 @@ def extraire_mentions(com, compos):
             valeurs = iter(valeurs)
             for m in jetons:
                 typ, cote = ent.get(m, (m, None))
-                if typ == "<gardien>":  # un gardien cité au moment d'un but est le plus souvent celui qui l'encaisse
+                if typ == "<gardien>":
                     cote = {"dom": "ext", "ext": "dom"}[cote]
                 mots.append(m)
                 types.append(typ)
@@ -183,10 +148,8 @@ def extraire_mentions(com, compos):
                 temps.append(minute)
                 idx_seg.append(i)
                 scores.append(next(valeurs) if m == "_score_" else (np.nan, np.nan))
-        # les mêmes mots « en clair » pour le modèle de langue : « goalkeeper 's goal », « 1-0 »
         clair = [f"{int(sc[0])}-{int(sc[1])}" if m == "_score_" else EN_CLAIR.get(t, t)
                  for m, t, sc in zip(mots, types, scores)]
-        # Mentions : chaque mot-clé, puis chaque tournure (ancrée sur son dernier mot)
         ancres = [(k, fam) for k, fam in enumerate(map(famille, mots)) if fam]
         phrase = " ".join(mots)
         debuts = np.cumsum([0] + [len(w) + 1 for w in mots[:-1]])
@@ -197,18 +160,19 @@ def extraire_mentions(com, compos):
             m = mots[k]
             g, d, i = types[max(0, k - FENETRE):k][::-1], types[k + 1:k + 1 + FENETRE], idx_seg[k]
             autour = [c for c in cotes[max(0, k - 30):k + 40] if c is not None]
+            extrait = " ".join(textes[max(0, i - 1):i + 2])
             lignes.append({
                 "match": match, "mi_temps": mt, "minute": temps[k], "mot": m, "famille": fam,
                 "a": scores[k][0], "b": scores[k][1],
                 "contexte_clair": clair[max(0, k - FENETRE_TEXTE):k + 1 + FENETRE_TEXTE],
                 "position": min(k, FENETRE_TEXTE),
                 "gauche": g, "droite": d, "regle": regle(g, d, m, fam),
-                "texte": " ".join(textes[max(0, i - 1):i + 2]),
+                "texte": extrait,
                 "seg_excl": "!" in textes[i], "seg_court": len(textes[i].split()) <= 4,
                 "cote_dom": autour.count("dom"), "cote_ext": autour.count("ext"),
+                "est_csc": bool(RE_CSC.search(extrait)),
             })
     m = pd.DataFrame(lignes).sort_values(["match", "mi_temps", "minute"], kind="stable").reset_index(drop=True)
-    # Densités autour de chaque mention : mentions et scores cités à ± 30 s, mentions juste avant
     m["n_mentions"] = m["n_scores"] = m["n_avant"] = 0.0
     est_score = (m["famille"] == "score cité").to_numpy()
     for _, idx in m.groupby(["match", "mi_temps"], sort=False).indices.items():
@@ -222,7 +186,6 @@ def extraire_mentions(com, compos):
 
 
 def ecart_au_but(m, buts):
-    """Écart (minutes) entre chaque ligne et le vrai but le plus proche de la même mi-temps (99 si aucun)."""
     dt = np.full(len(m), 99.0)
     bm = {k: g["minute"].to_numpy() for k, g in buts.groupby(["match", "mi_temps"])}
     for k, idx in m.groupby(["match", "mi_temps"]).indices.items():
@@ -234,18 +197,15 @@ def ecart_au_but(m, buts):
 
 
 def etiqueter(m, buts):
-    """Supervision à distance : y = 1 si la mention tombe juste après un vrai but (de 15 s avant à 1 min 30
-    après), y = 0 si elle est loin de tout but, NaN entre les deux (zone ambiguë : ralentis, discussions)."""
     dt = ecart_au_but(m, buts)
     ambigu = ((dt >= -1) & (dt < -0.25)) | ((dt > 1.5) & (dt <= 4))
     return np.where((dt >= -0.25) & (dt <= 1.5), 1.0, np.where(ambigu, np.nan, 0.0))
 
 
 # ----------------------------------------------------------------------------
-# 2. Étape 1 : sens de chaque mention
+# 2. Étape 1 : sens de chaque mention[cite: 6]
 # ----------------------------------------------------------------------------
 def caracteristiques(r):
-    """Ce que le classifieur voit d'une mention (aucun nom propre : seulement leur type)."""
     g, d = r["gauche"], r["droite"]
     forme = "gooal" if r["famille"] == "goal" and len(r["mot"]) > 5 else r["mot"]
     f = {f"famille={r['famille']}": 1, f"forme={forme}": 1}
@@ -267,24 +227,22 @@ def caracteristiques(r):
     f["meme_famille_autour"] = sum(famille(w) == r["famille"] for w in g[:5] + d[:5])
     f["seg_excl"] = float(r["seg_excl"])
     f["seg_court"] = float(r["seg_court"])
+    f["est_csc"] = float(r.get("est_csc", False))
     for c in ("n_mentions", "n_scores", "n_avant"):
         f[c] = np.log1p(r[c])
     return f
 
 
 def representations(m):
-    """Vecteurs du modèle de langue pré-entraîné pour chaque mention : le mot visé lu dans son contexte (768
-    nombres) et la moyenne du passage (768). Le modèle n'est pas ré-entraîné : il sert de lecteur.
-    Calculés une fois (≈ 5 min sur un processeur M1), puis gardés dans cache/."""
     if MODELE_LANGUE is None:
         return None
-    # la signature couvre le texte lu (rôles compris) : si un effectif change, les vecteurs sont recalculés
     signature = hashlib.sha1("\n".join(f"{a}|{b}|{c:.4f}|{d}|{' '.join(e)}" for a, b, c, d, e in
                                         zip(m["match"], m["mi_temps"], m["minute"], m["mot"],
                                             m["contexte_clair"])).encode()).hexdigest()
     if os.path.exists(FICHIER_REPRESENTATIONS):
         z = np.load(FICHIER_REPRESENTATIONS)
         if str(z["signature"]) == signature:
+            print("Chargement des représentations depuis le cache...")
             return z["E"]
     import torch
     from transformers import AutoModel, AutoTokenizer, logging
@@ -313,9 +271,6 @@ def representations(m):
 
 
 class SensDesMentions:
-    """P(la mention annonce un but qui vient d'être marqué | son contexte). Régression logistique sur les mots
-    typés et, si disponibles, les vecteurs du modèle de langue (E, une ligne par mention, indexée comme m)."""
-
     def __init__(self, E=None):
         self.E = E
 
@@ -344,7 +299,7 @@ class SensDesMentions:
 
 
 # ----------------------------------------------------------------------------
-# 3. Étape 2 : des mentions aux buts candidats, et vérification
+# 3. Étape 2 : des mentions aux buts candidats, et vérification[cite: 6]
 # ----------------------------------------------------------------------------
 VARIABLES_CANDIDAT = ["indice", "p_max", "top3", "somme_p", "n_mentions", "n_p50", "n_familles", "score_cite",
                       "excl", "minute", "mi_temps", "debut", "ecart_prec", "indice_prec", "rang",
@@ -352,9 +307,6 @@ VARIABLES_CANDIDAT = ["indice", "p_max", "top3", "somme_p", "n_mentions", "n_p50
 
 
 def candidats(m, p, seuil=0.05):
-    """Buts candidats. Pour chaque mention, l'indice de but combine les annonces des 30 s autour :
-    1 - Π(1 - p). On garde les pics au-dessus du seuil, séparés d'au moins REGROUPEMENT minutes, et on
-    décrit la rafale de mentions qui suit (de 30 s avant à 2 min après)."""
     m = m.assign(p=p)
     sorties = []
     for (match, mt), g in m.groupby(["match", "mi_temps"], sort=False):
@@ -371,6 +323,12 @@ def candidats(m, p, seuil=0.05):
             pris.append(t[k])
             w0, w1 = np.searchsorted(t, t[k] - 0.5), np.searchsorted(t, t[k] + 2, side="right")
             dom, ext = g["cote_dom"].iloc[a[k]:b[k]].sum(), g["cote_ext"].iloc[a[k]:b[k]].sum()
+
+            # Correction CSC : inversion de l'équipe si own goal détecté dans la rafale
+            texte_rafale = " ".join(g["texte"].iloc[w0:w1].astype(str))
+            if g["est_csc"].iloc[w0:w1].any() or RE_CSC.search(texte_rafale):
+                dom, ext = ext, dom
+
             sorties.append({
                 "match": match, "mi_temps": mt, "minute": t[k], "debut_rafale": t[w0],
                 "indice": indice[k], "p_max": q[a[k]:b[k]].max(), "somme_p": q[w0:w1].sum(),
@@ -385,7 +343,7 @@ def candidats(m, p, seuil=0.05):
                                        "p_dom", "texte"])
     c = c.sort_values(["match", "mi_temps", "minute"]).reset_index(drop=True)
     gr = c.groupby(["match", "mi_temps"])
-    c["ecart_prec"] = gr["minute"].diff().fillna(10).clip(upper=10)   # un ralenti suit le vrai but
+    c["ecart_prec"] = gr["minute"].diff().fillna(10).clip(upper=10)
     c["indice_prec"] = gr["indice"].shift().fillna(0)
     c["rang"] = c.groupby("match")["indice"].rank(ascending=False)
     c["equipe"] = np.where(c["p_dom"] >= 0.5, "dom", "ext")
@@ -394,8 +352,6 @@ def candidats(m, p, seuil=0.05):
 
 
 def indices_scores_cites(c, m):
-    """Pour chaque candidat : le total d'un score cité dans la rafale dépasse-t-il le dernier total cité
-    avant (« nouveau score ») ? Vaut-il le nombre de buts déjà quasi sûrs + 1 (« score cohérent ») ?"""
     s = m[m["famille"] == "score cité"]
     s = s.assign(t=(s["mi_temps"] - 1) * 100 + s["minute"], total=s["a"] + s["b"])
     par_match = {k: g for k, g in s.groupby("match")}
@@ -414,8 +370,6 @@ def indices_scores_cites(c, m):
 
 
 def apparier(detectes, buts, matchs):
-    """Associe chaque but annoté à au plus un but détecté (tolérance TOLERANCE).
-    Renvoie (comptes, indices des détections correctes)."""
     vp = equipe_ok = n_det = n_vrais = 0
     corrects = []
     det = {k: g for k, g in detectes.groupby(["match", "mi_temps"])}
@@ -443,16 +397,13 @@ def apparier(detectes, buts, matchs):
 
 
 class DetecteurDeButs:
-    """Étape 1 (sens des mentions) + étape 2 (vérification des candidats) + fiabilité des scores cités."""
-
     def __init__(self, E=None):
-        self.E = E  # vecteurs du modèle de langue (facultatif)
+        self.E = E
 
     def fit(self, m, buts):
         matchs = np.array(sorted(m["match"].unique()))
         y = etiqueter(m, buts)
         self.sens = SensDesMentions(self.E).fit(m, y)
-        # L'étape 2 doit apprendre sur des probabilités « honnêtes » : validation croisée interne
         p = np.zeros(len(m))
         for i_tr, i_te in GroupKFold(4).split(matchs, groups=matchs):
             te = m["match"].isin(set(matchs[i_te])).to_numpy()
@@ -467,8 +418,6 @@ class DetecteurDeButs:
         return self
 
     def predict(self, m):
-        """Renvoie (probabilités d'annonce des mentions, candidats avec q = P(vrai but),
-        scores cités avec leur fiabilité)."""
         p = self.sens.predict(m)
         c = candidats(m, p)
         c["q"] = self.verif.predict_proba(c[VARIABLES_CANDIDAT].astype(float))[:, 1] if len(c) else []
@@ -476,16 +425,11 @@ class DetecteurDeButs:
 
 
 # ----------------------------------------------------------------------------
-# 4. Score du match : buts candidats + scores cités, lus dans l'ordre
+# 4. Score du match : buts candidats + scores cités, lus dans l'ordre[cite: 6]
 # ----------------------------------------------------------------------------
 class FiabiliteScoresCites:
-    """Pour chaque score cité : P(c'est le score du moment, domicile d'abord), P(c'est le score inversé),
-    P(bruit), d'après les mots autour. « scores 0-1 » est fiable ; « 4-3-3 », « 3-1 last season » ou
-    « 5-1 in shots » ne le sont pas. Le bruit suit sa propre loi (beaucoup de 1-0, 2-1...)."""
-
     @staticmethod
     def classes(s, buts):
-        """1 = score réel du moment, 2 = score réel inversé, 0 = bruit."""
         y = np.zeros(len(s), dtype=int)
         bm = {k: g for k, g in buts.groupby("match")}
         for i, r in enumerate(s.itertuples()):
@@ -498,7 +442,13 @@ class FiabiliteScoresCites:
     @staticmethod
     def _f(r):
         f = caracteristiques(r)
-        f.update({"egalite": float(r["a"] == r["b"]), "total": r["a"] + r["b"], "ecart": abs(r["a"] - r["b"])})
+        proches = set(r["gauche"][:4] + r["droite"][:4])
+        f.update({
+            "egalite": float(r["a"] == r["b"]),
+            "total": r["a"] + r["b"],
+            "ecart": abs(r["a"] - r["b"]),
+            "equipe_proche": float("<equipe>" in proches),
+        })
         return f
 
     def fit(self, m, buts):
@@ -522,8 +472,6 @@ class FiabiliteScoresCites:
 
 
 def decoder_score(c, cites):
-    """Loi du score final d'un match. On part de 0-0 ; chaque candidat est un but avec la probabilité q
-    (pour le domicile avec la probabilité p_dom) ; chaque score cité recale la loi selon sa fiabilité."""
     n = MAX_BUTS + 1
     P = np.zeros((n, n))
     P[0, 0] = 1.0
@@ -537,14 +485,12 @@ def decoder_score(c, cites):
 
 
 def _evenements(c, cites):
-    """Candidats (genre 0) et scores cités (genre 1) dans l'ordre où ils sont prononcés."""
     ev = [(r.mi_temps, r.debut_rafale, 0, r) for r in c.itertuples()]
     ev += [(r.mi_temps, r.minute, 1, r) for r in cites.itertuples()]
     return [(genre, r) for _, _, genre, r in sorted(ev, key=lambda e: (e[0], e[1], e[2]))]
 
 
 def _decaler(P, cote):
-    """Loi du score après un but du domicile (cote 0) ou de l'extérieur (cote 1)."""
     S = np.zeros_like(P)
     if cote == 0:
         S[1:, :] = P[:-1, :]
@@ -554,7 +500,6 @@ def _decaler(P, cote):
 
 
 def _remonter(B, cote):
-    """Opération inverse de _decaler, pour la passe arrière : S[score] = B[score + un but]."""
     S = np.zeros_like(B)
     if cote == 0:
         S[:-1, :] = B[1:, :]
@@ -572,12 +517,6 @@ def _vraisemblance_cite(r, n):
 
 
 def expliquer_score(c, cites, final):
-    """Pourquoi le modèle lit le score `final` : quels candidats sont des buts, et sur quels mots.
-    - Les buts retenus sont ceux du chemin le plus probable (Viterbi) qui mène de 0-0 à `final`.
-    - Chaque but reçoit sa probabilité a posteriori (passes avant et arrière) : tout ce qui est dit après
-      compte aussi, par exemple un « 3-0 » prononcé juste après une annonce peu claire.
-    - On joint le premier score cité qui le confirme ensuite (même score, avant le but suivant).
-    Renvoie une liste de dicts {candidat, equipe ('dom' / 'ext'), proba, cite (ligne ou None)}."""
     n = MAX_BUTS + 1
     ev = _evenements(c, cites)
     alpha = [np.zeros((n, n))]
@@ -595,7 +534,7 @@ def expliquer_score(c, cites, final):
             L = _vraisemblance_cite(r, n)
             A, delta = A * L, delta * L
             retours.append(None)
-        alpha.append(A / A.sum())            # seules les proportions comptent : on renormalise
+        alpha.append(A / A.sum())
         delta = delta / delta.max()
     beta = [None] * len(ev) + [np.ones((n, n))]
     for e in range(len(ev) - 1, -1, -1):
@@ -606,7 +545,6 @@ def expliquer_score(c, cites, final):
         else:
             B = _vraisemblance_cite(r, n) * B
         beta[e] = B / B.max()
-    # Remontée du chemin depuis le score lu
     etat, buts = (int(final[0]), int(final[1])), []
     for e in range(len(ev) - 1, -1, -1):
         if retours[e] is None:
@@ -635,7 +573,6 @@ def resume_score(P):
 
 
 def evaluer_scores(predits, infos, matchs):
-    """predits : DataFrame indexé par match avec buts_dom, buts_ext prédits."""
     p = predits.reindex(list(matchs)).fillna(0)
     v = infos.loc[list(matchs)]
     exact = (p["buts_dom"].to_numpy() == v["buts_dom"].to_numpy()) & (p["buts_ext"].to_numpy() == v["buts_ext"].to_numpy())
@@ -652,7 +589,7 @@ def compter(detectes):
 
 
 # ----------------------------------------------------------------------------
-# 5. Évaluation complète
+# 5. Évaluation complète[cite: 6]
 # ----------------------------------------------------------------------------
 def main():
     pd.set_option("display.width", 200)
@@ -664,38 +601,48 @@ def main():
     infos = donnees.infos_matchs(com["match"])
     buts, annotes = donnees.charger_buts()
     compos = donnees.charger_compositions(infos)
-    annotes = np.array(sorted(set(infos.index) & annotes))
+
+    annotes = np.array(sorted(set(infos.index) & set(annotes)))
     inedits = sorted(set(infos.index) - set(annotes))
+
+    if len(annotes) == 0:
+        raise ValueError("Aucun match annoté trouvé : impossible de poursuivre la validation.")
+
     m = extraire_mentions(com, compos)
-    E = representations(m)
     ann = m["match"].isin(set(annotes)).to_numpy()
     y = np.where(ann, etiqueter(m, buts), np.nan)
-    print(f"{len(infos)} matchs ({len(annotes)} annotés par SoccerNet), {len(m)} mentions candidates "
-          f"({len(m) / len(infos):.0f} par match, dont {(m['famille'] == 'goal').sum() / len(infos):.0f} « goal »), "
-          f"pour {len(buts[buts['match'].isin(set(annotes))]) / len(annotes):.1f} buts par match")
-    print(f"Mentions prononcées juste après un vrai but : {np.nanmean(y):.0%}")
 
-    # --- Validation croisée par match (+ modèle entraîné sur tous les matchs annotés pour les autres)
-    p = np.full(len(m), np.nan)
-    cand, cites = [], []
-    plis = list(GroupKFold(N_PLIS).split(annotes, groups=annotes))
-    for k, (i_tr, i_te) in enumerate(plis):
-        print(f"  pli {k + 1}/{N_PLIS}...")
-        tr, te = set(annotes[i_tr]), m["match"].isin(set(annotes[i_te])).to_numpy()
-        det = DetecteurDeButs(E).fit(m[m["match"].isin(tr)], buts[buts["match"].isin(tr)])
-        p[te], c, sc = det.predict(m[te])
+    if os.path.exists(CACHE_CV):
+        print("Chargement des résultats de validation croisée depuis le cache...")
+        with open(CACHE_CV, "rb") as f:
+            p, cand, cites, final = pickle.load(f)
+    else:
+        E = representations(m)
+        p = np.full(len(m), np.nan)
+        cand, cites = [], []
+        plis = list(GroupKFold(N_PLIS).split(annotes, groups=annotes))
+        for k, (i_tr, i_te) in enumerate(plis):
+            print(f"  pli {k + 1}/{N_PLIS}...")
+            tr, te = set(annotes[i_tr]), m["match"].isin(set(annotes[i_te])).to_numpy()
+            det = DetecteurDeButs(E).fit(m[m["match"].isin(tr)], buts[buts["match"].isin(tr)])
+            p[te], c, sc = det.predict(m[te])
+            cand.append(c)
+            cites.append(sc)
+        print("  matchs jamais annotés...")
+        final = DetecteurDeButs(E).fit(m[ann], buts[buts["match"].isin(set(annotes))])
+        p[~ann], c, sc = final.predict(m[~ann])
         cand.append(c)
         cites.append(sc)
-    print("  matchs jamais annotés...")
-    final = DetecteurDeButs(E).fit(m[ann], buts[buts["match"].isin(set(annotes))])
-    p[~ann], c, sc = final.predict(m[~ann])
-    cand.append(c)
-    cites.append(sc)
-    cand = pd.concat(cand, ignore_index=True)
-    cites = pd.concat(cites, ignore_index=True)
+        cand = pd.concat(cand, ignore_index=True)
+        cites = pd.concat(cites, ignore_index=True)
+
+        os.makedirs(os.path.dirname(CACHE_CV), exist_ok=True)
+        with open(CACHE_CV, "wb") as f:
+            pickle.dump((p, cand, cites, final), f)
+
     m["p"] = p
 
-    # --- Étape 1 : sens des mentions
+    # --- Étape 1 : sens des mentions[cite: 6]
     lab = ~np.isnan(y)
     mots_cles = m["famille"].isin(FAMILLES_MOTS).to_numpy()
     lm, lt = lab & mots_cles, lab & ~mots_cles
@@ -707,18 +654,8 @@ def main():
     plus, moins = final.sens.poids()
     print("Indices d'une annonce :", ", ".join(plus.index))
     print("Indices du contraire  :", ", ".join(moins.index))
-    print("\nLes règles écrites à la main se trompent souvent (part de vraies annonces quand elles s'appliquent) :")
-    r = pd.DataFrame({"regle": m["regle"].fillna("(aucune)")[lab], "y": y[lab]})
-    print(r.groupby("regle")["y"].agg(mentions="size", vraies_annonces="mean").round(2).to_string())
 
-    gk = (m["famille"] == "goal") & m["gauche"].map(lambda g: g[:2] == ["_poss_", "<gardien>"]) & lab
-    jo = (m["famille"] == "goal") & m["gauche"].map(lambda g: g[:2] == ["_poss_", "<joueur>"]) & lab
-    print(f"\nLe piège « <gardien>'s goal » ({gk.sum()} cas) : probabilité d'annonce moyenne {m.loc[gk, 'p'].mean():.2f}, "
-          f"vraies annonces {np.mean(y[gk]):.0%}")
-    print(f"À comparer à « <joueur>'s goal » ({jo.sum()} cas) : probabilité moyenne {m.loc[jo, 'p'].mean():.2f}, "
-          f"vraies annonces {np.mean(y[jo]):.0%}")
-
-    # --- Étape 2 : buts détectés
+    # --- Étape 2 : buts détectés[cite: 6]
     approches = {
         "naïve (tout « goal » est un but)": candidats(m, mots_cles.astype(float), 0.5),
         "règles écrites à la main": candidats(m, (mots_cles & m["regle"].isna().to_numpy()).astype(float), 0.5),
@@ -731,7 +668,7 @@ def main():
         lignes.append({"approche": nom, **apparier(d, buts, annotes)[0]})
     print(pd.DataFrame(lignes).set_index("approche").round(2).to_string())
 
-    # --- Score du match
+    # --- Score du match[cite: 6]
     sc = cites.assign(y=FiabiliteScoresCites.classes(cites, buts))
     sc = sc[sc["match"].isin(set(annotes))]
     print(f"\n=== Scores cités ({len(sc)} dans les matchs annotés) ===")
@@ -753,13 +690,8 @@ def main():
     lignes.append({"approche": "modèle + scores cités", "matchs": "jamais annotés",
                    **evaluer_scores(dec, infos, inedits)})
     print(pd.DataFrame(lignes).round(2).to_string(index=False))
-    tous = infos.loc[annotes]
-    frequents = tous.groupby(["buts_dom", "buts_ext"]).size()
-    sd, se = frequents.idxmax()
-    print(f"Repères : toujours « victoire à domicile » -> bon résultat {(tous['resultat'] == 1).mean():.0%} ; "
-          f"toujours le score le plus fréquent ({sd}-{se}) -> score exact {frequents.max() / len(tous):.0%}")
 
-    # --- Fichiers pour regarder les erreurs
+    # --- Fichiers pour regarder les erreurs[cite: 6]
     d = cand[cand["q"] >= 0.5].merge(infos[["dom", "ext"]], left_on="match", right_index=True)
     d["equipe"] = np.where(d["equipe"] == "dom", d["dom"], d["ext"])
     d["minute_match"] = (d["minute"] + 45 * (d["mi_temps"] - 1)).round(1)

@@ -1,25 +1,12 @@
 """
 Prédire le match « en direct », minute après minute, à partir des seuls commentaires déjà prononcés.
 
-À chaque point de contrôle (0', 10', 20'… mi-temps… 90', fin) :
-1. on ne garde que les commentaires prononcés avant cette minute ;
-2. le détecteur de buts (detection_buts.py) estime le score courant : loi de probabilité sur 0-0, 1-0, 0-1... ;
-   on garde aussi l'explication de ce score (quels passages ont été comptés comme buts, quel score cité les
-   confirme) pour l'afficher ;
-3. on projette la fin du match : les buts restants suivent une loi de Poisson dont le taux vient de la force des
-   équipes avant le match (filtre de Kalman sur les seuls matchs antérieurs) et de la part du temps qui reste
-   (mesurée sur les annotations : on marque plus en fin de mi-temps) ;
-4. on en déduit les chances de victoire / nul / défaite et le score final le plus probable.
-
-Au coup d'envoi, la prédiction est donc celle de l'avant-match ; elle s'affine à mesure que le match avance.
-Tout est évalué en validation croisée par match. Le script écrit match_en_direct.html. Les actions annotées
-(buts, cartons, tirs...) servent seulement à animer la page et à montrer le vrai déroulement, jamais à prédire.
-
 Usage (environnement conda nlp-foot, dans le dossier du projet) :
-    python direct.py
+    python direct_2.py
 """
 import json
 import os
+import pickle
 import re
 from collections import defaultdict
 
@@ -36,14 +23,14 @@ import equipes
 PAGE = os.path.join(donnees.ICI, "match_en_direct.html")
 GABARIT = os.path.join(donnees.ICI, "gabarit_page.html")
 FICHIER_JSON = os.path.join(donnees.ICI, "resultats", "predictions_direct.json")
+CACHE_MODELES = os.path.join(donnees.ICI, "cache", "modeles_direct_v2.pkl")
+
 COMPETITIONS = {"england_epl": "Premier League", "spain_laliga": "LaLiga", "italy_serie-a": "Serie A",
                 "germany_bundesliga": "Bundesliga", "france_ligue-1": "Ligue 1",
                 "europe_uefa-champions-league": "Ligue des champions"}
 POINTS = ["0'", "10'", "20'", "30'", "40'", "Mi-temps", "50'", "60'", "70'", "80'", "90'", "Fin"]
 MARGE = 0.25                 # minute : on ignore les 15 dernières secondes (le contexte d'une mention déborde un peu)
 ELO_INIT, ELO_K, ELO_DOMICILE = 1500.0, 20.0, 60.0    # Elo classique, gardé comme point de comparaison
-# Force « à la Kalman », en buts par match par rapport à une équipe moyenne. Réglage fixé d'avance, pas cherché
-# sur les matchs d'évaluation (27 réglages voisins donnent tous de 67 à 69 % de bons vainqueurs au coup d'envoi).
 FORCE_VARIANCE_INIT = 0.5    # incertitude sur une équipe jamais vue (écart-type ≈ 0,7 but)
 FORCE_DERIVE = 0.1           # variance ajoutée par an : une équipe change d'une saison à l'autre
 FORCE_BRUIT = 3.0            # variance de l'écart de buts d'un match autour de l'écart attendu (écart-type ≈ 1,7)
@@ -98,15 +85,7 @@ def calculer_elo(infos):
 
 
 def calculer_force(infos):
-    """Force de chaque équipe avant chaque match, par un filtre de Kalman (seuls les matchs antérieurs).
-
-    Chaque équipe a une force estimée (buts par match de plus qu'une équipe moyenne) et une incertitude.
-    - Prédiction : entre deux matchs, l'incertitude grandit (FORCE_DERIVE par an).
-    - Mise à jour : l'écart de buts observé (borné à ± ECART_MAX) est comparé à l'écart attendu, force du
-      domicile − force de l'extérieur + avantage du terrain. Chaque équipe corrige sa force d'une part de la
-      surprise : le gain de Kalman, d'autant plus grand qu'on la connaît mal, et qui diminue match après match.
-    L'Elo fait la même correction avec un gain fixe (K) pour toutes les équipes. L'avantage du terrain est la
-    moyenne des écarts de buts déjà vus."""
+    """Force de chaque équipe avant chaque match, par un filtre de Kalman (seuls les matchs antérieurs)."""
     force, variance, vu = {}, {}, {}
     somme, n = TERRAIN_INIT * TERRAIN_POIDS, TERRAIN_POIDS
     lignes = {}
@@ -134,8 +113,7 @@ def calculer_force(infos):
 
 
 class AvantMatch:
-    """Buts attendus de chaque équipe sur tout le match : régression de Poisson sur l'écart de force (colonne
-    « ecart » de calculer_force, ou de calculer_elo pour la comparaison)."""
+    """Buts attendus de chaque équipe sur tout le match : régression de Poisson sur l'écart de force."""
 
     @staticmethod
     def _x(force):
@@ -211,20 +189,19 @@ def extrait(texte, n=220):
     return texte if len(texte) <= n else texte[:n].rsplit(" ", 1)[0] + " …"
 
 
-def predire_match(det, m, p, cites, lam, restant):
+def predire_match(verif, m, p, cites, lam, restant):
     """Les 12 points de contrôle d'un match (mentions m, probabilités d'annonce p, scores cités notés)."""
     sorties = []
     m = m.assign(p=p)
     for point in POINTS:
         mx, cx = avant(m, point, MARGE), avant(cites, point, MARGE)
         c = db.candidats(mx, mx["p"].to_numpy())
-        c["q"] = det.verif.predict_proba(c[db.VARIABLES_CANDIDAT].astype(float))[:, 1] if len(c) else []
+        c["q"] = verif.predict_proba(c[db.VARIABLES_CANDIDAT].astype(float))[:, 1] if len(c) else []
         P = db.decoder_score(c, cx)
         r = restant(point)
         F = projeter(P, lam[0] * r, lam[1] * r)
         cour = np.unravel_index(P.argmax(), P.shape)
         proba, prono = resumer(F, cour)
-        # Pourquoi ce score : les buts retenus, leur annonce et le score cité qui les confirme
         lus = []
         for b in db.expliquer_score(c, cx, cour):
             g, s = b["candidat"], b["cite"]
@@ -242,8 +219,7 @@ def predire_match(det, m, p, cites, lam, restant):
 
 
 def comparer_avant_match(tous, infos, annotes, inedits, variantes):
-    """Bon vainqueur et log loss au coup d'envoi selon la mesure de la force des équipes (même validation
-    croisée que le reste) : c'est là seulement que la force compte seule."""
+    """Bon vainqueur et log loss au coup d'envoi selon la mesure de la force des équipes."""
     plis = [list(annotes[te]) for _, te in GroupKFold(db.N_PLIS).split(annotes, groups=annotes)]
     depart = np.zeros((db.MAX_BUTS + 1, db.MAX_BUTS + 1))
     depart[0, 0] = 1.0
@@ -272,7 +248,7 @@ def evaluer(matchs_json, infos, annotes):
     """Par point de contrôle : bon résultat, log loss, pronostic exact, score courant exact (matchs annotés)."""
     lignes = []
     for k, point in enumerate(POINTS):
-        y, P, prono_ok, cour_ok, ann = [], [], [], [], []
+        y, P, prono_ok, cour_ok = [], [], [], []
         for mj in matchs_json:
             pt = mj["points"][k]
             v = infos.loc[mj["id"]]
@@ -291,6 +267,38 @@ def evaluer(matchs_json, infos, annotes):
     return lignes
 
 
+def obtenir_predictions_cv(m, buts, annotes, inedits):
+    """Entraîne ou charge depuis le cache les prédictions de mentions et classifieurs par pli."""
+    if os.path.exists(CACHE_MODELES):
+        print("Chargement des prédictions de mentions depuis le cache...")
+        with open(CACHE_MODELES, "rb") as f:
+            return pickle.load(f)
+
+    E = db.representations(m)
+    plis = list(GroupKFold(db.N_PLIS).split(annotes, groups=annotes))
+    etapes = []
+    for k, (i_tr, i_te) in enumerate(plis):
+        print(f"  pli {k + 1}/{db.N_PLIS}...")
+        tr = set(annotes[i_tr])
+        te_list = list(annotes[i_te])
+        det = db.DetecteurDeButs(E).fit(m[m["match"].isin(tr)], buts[buts["match"].isin(tr)])
+        sel = m["match"].isin(set(te_list)).to_numpy()
+        p, _, cites = det.predict(m[sel])
+        etapes.append((te_list, tr, det.verif, m[sel].assign(p=p), cites))
+
+    print("  matchs jamais annotés...")
+    tr_all = set(annotes)
+    det = db.DetecteurDeButs(E).fit(m[m["match"].isin(tr_all)], buts[buts["match"].isin(tr_all)])
+    sel = m["match"].isin(set(inedits)).to_numpy()
+    p, _, cites = det.predict(m[sel])
+    etapes.append((inedits, tr_all, det.verif, m[sel].assign(p=p), cites))
+
+    os.makedirs(os.path.dirname(CACHE_MODELES), exist_ok=True)
+    with open(CACHE_MODELES, "wb") as f:
+        pickle.dump(etapes, f)
+    return etapes
+
+
 def main():
     pd.set_option("display.width", 200)
     os.makedirs(os.path.dirname(FICHIER_JSON), exist_ok=True)
@@ -302,41 +310,25 @@ def main():
     compos = donnees.charger_compositions(infos)
     annotes = np.array(sorted(set(infos.index) & tous_annotes))
     inedits = sorted(set(infos.index) - set(annotes))
-    # Force des équipes : tous les matchs SoccerNet dont on connaît le résultat (nom du dossier)
     tous = donnees.infos_matchs(set(infos.index) | tous_annotes)
     force = calculer_force(tous)
     print("Extraction des mentions...")
     m = db.extraire_mentions(com, compos)
-    E = db.representations(m)
 
-    def bloc(det, matchs_test, matchs_train):
+    etapes = obtenir_predictions_cv(m, buts, annotes, inedits)
+
+    resultats = []
+    for matchs_test, matchs_train, verif, mt, cites in etapes:
         avant_match = AvantMatch().fit(tous.drop(index=list(matchs_test)), force)
         m_ann = set(matchs_train) & set(annotes)
         restant = TempsRestant().fit(buts[buts["match"].isin(m_ann)], len(m_ann))
-        sel = m["match"].isin(set(matchs_test)).to_numpy()
-        p, _, cites = det.predict(m[sel])
-        mt = m[sel].assign(p=p)
         lam_d, lam_e = avant_match.predict(force.loc[list(matchs_test)])
         lam = dict(zip(matchs_test, zip(lam_d, lam_e)))
         cm = {x: g for x, g in cites.groupby("match")}
-        res = []
         for match, g in mt.groupby("match"):
-            points = predire_match(det, g, g["p"].to_numpy(), cm.get(match, cites.iloc[:0]), lam[match], restant)
-            res.append((match, points, lam[match]))
-        return res
+            points = predire_match(verif, g, g["p"].to_numpy(), cm.get(match, cites.iloc[:0]), lam[match], restant)
+            resultats.append((match, points, lam[match]))
 
-    resultats = []
-    plis = list(GroupKFold(db.N_PLIS).split(annotes, groups=annotes))
-    for k, (i_tr, i_te) in enumerate(plis):
-        print(f"  pli {k + 1}/{db.N_PLIS}...")
-        tr = set(annotes[i_tr])
-        det = db.DetecteurDeButs(E).fit(m[m["match"].isin(tr)], buts[buts["match"].isin(tr)])
-        resultats += bloc(det, list(annotes[i_te]), tr)
-    print("  matchs jamais annotés...")
-    det = db.DetecteurDeButs(E).fit(m[m["match"].isin(set(annotes))], buts[buts["match"].isin(set(annotes))])
-    resultats += bloc(det, inedits, set(annotes))
-
-    # Durée de chaque mi-temps (temps additionnel compris) : dernière action annotée ou dernier commentaire
     duree = pd.concat([com.groupby(["match", "mi_temps"])["minute"].max(),
                        evenements.groupby(["match", "mi_temps"])["minute"].max()], axis=1).max(axis=1)
     ev_match = {x: g for x, g in evenements.groupby("match")}
@@ -349,13 +341,11 @@ def main():
             "date": v["date"], "dom": equipes.identite(v["dom"]), "ext": equipes.identite(v["ext"]),
             "fin_mt": [round(float(np.clip(duree.get((match, mt), 45.0), 45.0, 55.0)), 2) for mt in (1, 2)],
             "final": [int(v["buts_dom"]), int(v["buts_ext"])],
-            # force avant-match (buts par match de plus qu'une équipe moyenne) et son incertitude (écart-type)
             "force": [[round(float(e["force_dom"]), 2), round(float(e["incert_dom"]), 2)],
                       [round(float(e["force_ext"]), 2), round(float(e["incert_ext"]), 2)]],
             "terrain": round(float(e["terrain"]), 2),
             "buts_attendus": [round(float(lam[0]), 2), round(float(lam[1]), 2)],
             "reel": [score_reel(buts, match, pt) for pt in POINTS] if match in set(annotes) else None,
-            # actions annotées (affichage seulement) : [mi-temps, minute, code, 0 domicile / 1 extérieur / -1]
             "evenements": [[*temps(a.mi_temps, a.minute), a.code, {"dom": 0, "ext": 1}.get(a.equipe, -1)]
                            for a in ev_match[match].itertuples()] if match in ev_match else None,
             "points": points,
@@ -394,7 +384,7 @@ def construire_page(donnees_page):
 
 if __name__ == "__main__":
     import sys
-    if "--page" in sys.argv:  # reconstruire seulement la page à partir des prédictions déjà calculées
+    if "--page" in sys.argv:
         with open(FICHIER_JSON, encoding="utf-8") as f:
             construire_page(json.load(f))
     else:
