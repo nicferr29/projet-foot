@@ -4,147 +4,238 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Match en direct</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
+  /* Direction artistique : un soir de match télévisé. Stade de nuit, projecteurs, habillage télé anguleux,
+     panneaux LED, couleurs des deux équipes. Polices condensées (Barlow Condensed en ligne, DIN Condensed hors ligne). */
   :root{
-    --nuit:#0a120e; --verre:rgba(8,18,13,.72); --verre-bord:rgba(255,255,255,.14);
-    --txt:#f4f7f5; --doux:#b3c2ba; --nul:#9aa5a0; --ok:#3ddc84; --ko:#ff5c5c; --jaune:#ffd54a;
-    --dom:#4c8dff; --ext:#ff8a3d;
+    --nuit:#05080f; --navy:#0b1424; --navy2:#13213a; --trait:rgba(255,255,255,.12);
+    --txt:#f5f7fa; --doux:#a3b3c8; --nul:#9aa5a0; --ok:#3ddc84; --ko:#ff5c5c; --jaune:#ffd23f; --led:#ffb627;
+    --c-dom:#e10600; --c-ext:#1f6fff;
+    --titre:"Barlow Condensed","DIN Condensed","Arial Narrow","Roboto Condensed",sans-serif;
+    --texte:"Barlow","DIN Alternate","Helvetica Neue",Arial,sans-serif;
+    --coupe:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);
+    --coupe-g:polygon(14px 0,100% 0,100% 100%,0 100%);
   }
   *{box-sizing:border-box}
   [hidden]{display:none !important}
-  html,body{margin:0;min-height:100%;color:var(--txt);background:var(--nuit);
-    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  /* pelouse du « studio » autour de l'écran */
+  html,body{margin:0;min-height:100%;color:var(--txt);background:var(--nuit);font:15px/1.45 var(--texte)}
+  /* ciel de nuit et halo des projecteurs */
   .fond{position:fixed;inset:0;z-index:0;
-    background:radial-gradient(ellipse at 50% 35%,rgba(0,0,0,0) 0%,rgba(0,0,0,.55) 85%),
-      repeating-linear-gradient(90deg,#1f5a2a 0 70px,#1b5226 70px 140px)}
-  .page{position:relative;z-index:1;display:flex;flex-direction:column;gap:12px;padding:14px 16px 18px;max-width:1500px;margin:0 auto}
-
-  /* En-tête */
-  .haut{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap}
-  .titre{min-width:0}
-  .titre b{display:block;font-size:15px;letter-spacing:.02em}
-  .titre span{font-size:12.5px;color:var(--doux)}
-  .choix{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0}
-  select,button{font:inherit;font-size:14px;color:var(--txt);background:rgba(0,0,0,.4);border:1px solid var(--verre-bord);
-    border-radius:8px;padding:7px 10px}
-  select{max-width:100%;min-width:0}
-  #match{min-width:240px;max-width:420px}
+    background:radial-gradient(50% 42% at 6% -6%,rgba(255,248,214,.22),transparent 70%),
+      radial-gradient(50% 42% at 94% -6%,rgba(255,248,214,.22),transparent 70%),
+      linear-gradient(180deg,#0e1a2c 0%,#070b14 50%,#04060b 100%)}
+  .page{position:relative;z-index:1;display:flex;flex-direction:column;gap:12px;padding:14px 16px 20px;max-width:1500px;margin:0 auto}
+  button,select{font-family:var(--titre);color:var(--txt)}
   button{cursor:pointer}
-  button:hover{border-color:rgba(255,255,255,.45)}
-  button:focus-visible,select:focus-visible{outline:2px solid var(--jaune);outline-offset:1px}
+  button:focus-visible,select:focus-visible{outline:2px solid var(--jaune);outline-offset:2px}
 
-  /* L'écran : le terrain filmé, avec les incrustations télé */
-  .ecran{position:relative;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12);
-    box-shadow:0 14px 40px rgba(0,0,0,.5);background:#2a7236}
-  .ecran svg.terrain{display:block;width:100%;height:clamp(280px,calc(100vh - 470px),640px);overflow:visible}
+  /* En-tête : compétition, match, match au hasard, tous de la même taille */
+  .entete{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:10px}
+  .champ{position:relative;display:block;min-width:0;background:linear-gradient(180deg,var(--navy2),var(--navy));
+    border-left:6px solid var(--jaune);clip-path:var(--coupe);box-shadow:inset 0 -3px 0 rgba(0,0,0,.35)}
+  .champ > span{position:absolute;left:14px;top:8px;font:700 11px/1 var(--titre);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--jaune);pointer-events:none}
+  .champ select{appearance:none;-webkit-appearance:none;width:100%;height:62px;border:0;background:transparent;color:#fff;
+    font:700 22px/1 var(--titre);text-transform:uppercase;letter-spacing:.03em;padding:22px 48px 4px 14px;cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .champ select option{color:#111;background:#fff;text-transform:none;font-size:15px}
+  .champ::after{content:"";position:absolute;right:30px;top:50%;margin-top:-3px;border:7px solid transparent;border-top-color:var(--jaune);pointer-events:none}
+  .champ:focus-within{box-shadow:inset 0 0 0 2px var(--jaune)}
+  .champ select:focus-visible{outline:none}
+  .gros-bouton{height:62px;padding:0 34px 0 22px;border:0;background:var(--jaune);color:var(--navy);font:800 22px/1 var(--titre);
+    text-transform:uppercase;letter-spacing:.04em;clip-path:var(--coupe);display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .gros-bouton:hover{background:#fff}
+  .gros-bouton:focus-visible{outline:none;box-shadow:inset 0 0 0 3px var(--navy)}
+
+  /* L'écran : le stade, filmé d'en haut */
+  .ecran{position:relative;overflow:hidden;background:#090e17;border-top:4px solid var(--jaune);
+    box-shadow:0 20px 50px rgba(0,0,0,.65)}
+  .ecran svg.terrain{display:block;width:100%;height:clamp(320px,calc(100vh - 420px),720px);overflow:visible}
   .ecran::after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 55%,rgba(0,0,0,.35) 100%)}
+    background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 50%,rgba(0,0,0,.45) 100%)}
+  /* tribunes : tifo derrière les buts, lumières de la foule le long des touches ; tout s'emballe au but */
+  .vague{opacity:.3;animation:vague 10s linear infinite}
+  .fete .vague{opacity:1;animation-duration:1.1s}
+  @keyframes vague{from{transform:translateX(0)}to{transform:translateX(var(--dx,900px))}}
+  .bokeh{opacity:.8}
+  .fete .bokeh{animation:pulse .35s ease-in-out infinite alternate}
+  @keyframes pulse{from{opacity:.75}to{opacity:1}}
+  .flashs circle{opacity:0;animation:flash 3s linear infinite}
+  .fete .flashs circle{animation-duration:.7s}
+  @keyframes flash{0%,90%,100%{opacity:0}93%{opacity:1}}
+  .fumi{opacity:0}
+  .fete .fumi{animation:flamme .16s ease-in-out infinite alternate}
+  @keyframes flamme{from{opacity:.65}to{opacity:1}}
+  .defile{animation:defile 30s linear infinite}
+  @keyframes defile{to{transform:translateX(var(--d,-400px))}}
+  .led-but text{animation:clignote .5s steps(2) infinite}
+  @keyframes clignote{50%{opacity:.35}}
 
   /* Tableau d'affichage */
-  .tableau{position:absolute;top:12px;right:12px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:4px;
-    font-variant-numeric:tabular-nums;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))}
-  .barre{display:flex;align-items:stretch;height:38px;border-radius:6px;overflow:hidden;
-    background:linear-gradient(#1d2738,#0f1520);color:#fff;font-weight:800;letter-spacing:.04em}
-  .barre .comp{display:flex;align-items:center;padding:0 9px;background:#e8edf3;color:#0f1520;font-size:12px;letter-spacing:.06em}
-  .barre .eq{display:flex;align-items:center;gap:7px;padding:0 10px;font-size:16px}
-  .kit{display:flex;width:9px;align-self:stretch;margin:7px 0}
+  .tableau{position:absolute;top:14px;right:14px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:4px;
+    font-variant-numeric:tabular-nums;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6))}
+  .barre{display:flex;align-items:stretch;height:44px;overflow:hidden;background:linear-gradient(#1a2740,#0b1424);color:#fff;
+    font-family:var(--titre);font-weight:700;letter-spacing:.05em;clip-path:var(--coupe-g)}
+  .barre .comp{display:flex;align-items:center;padding:0 12px 0 22px;background:var(--jaune);color:var(--navy);font-size:15px;font-weight:800;letter-spacing:.08em}
+  .barre .eq{display:flex;align-items:center;gap:8px;padding:0 12px;font-size:22px}
+  .kit{display:flex;width:10px;align-self:stretch;margin:8px 0}
   .kit i{flex:1}
   .rouges{display:flex;gap:2px}
-  .rouges i{width:7px;height:11px;background:#e5202e;border-radius:1.5px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
-  .barre .score{display:flex;align-items:center;gap:7px;padding:0 11px;background:rgba(255,255,255,.1);font-size:20px}
-  .barre .score .t{opacity:.55;font-weight:600}
-  .barre .horloge{display:flex;align-items:center;gap:6px;padding:0 10px;background:#0a0e15;font-size:16px;min-width:76px;justify-content:center}
-  .barre .add{background:var(--jaune);color:#111;font-size:12px;padding:1px 5px;border-radius:3px}
-  .lu{display:flex;align-items:center;gap:8px;padding:3px 9px;border-radius:5px;background:rgba(10,14,21,.88);
-    font-size:12px;color:var(--doux);letter-spacing:.04em;text-transform:uppercase}
-  .lu b{color:#fff;font-size:14px;letter-spacing:0}
+  .rouges i{width:8px;height:12px;background:#e5202e;border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+  .barre .score{display:flex;align-items:center;gap:8px;padding:0 14px;background:#fff;color:var(--navy);font-size:28px;font-weight:800}
+  .barre .score .t{opacity:.5;font-weight:600}
+  .barre .horloge{display:flex;align-items:center;gap:6px;padding:0 12px;background:#05080f;font-size:22px;min-width:84px;justify-content:center}
+  .barre .add{background:var(--jaune);color:#111;font-size:13px;padding:1px 5px}
+  .lu{display:flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(5,8,15,.92);font:600 13px/1.2 var(--titre);
+    color:var(--doux);letter-spacing:.08em;text-transform:uppercase;clip-path:var(--coupe-g);padding-left:20px}
+  .lu b{color:#fff;font-size:16px;letter-spacing:.02em}
   .lu .quoi{color:var(--jaune);font-weight:700}
-  .lu .sep{width:1px;align-self:stretch;background:rgba(255,255,255,.2)}
+  .lu .sep{width:1px;align-self:stretch;background:rgba(255,255,255,.25)}
   .barre .score.eclat{animation:eclat 1.2s ease-out}
-  @keyframes eclat{0%{background:var(--jaune);color:#111}100%{background:rgba(255,255,255,.1);color:#fff}}
-  .onglet{padding:5px 11px;border-radius:5px;font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
-    transform-origin:top right;animation:glisse .35s ease-out}
+  @keyframes eclat{0%{background:var(--jaune)}100%{background:#fff}}
+  .onglet{padding:6px 14px 6px 22px;font:800 15px/1.2 var(--titre);letter-spacing:.07em;text-transform:uppercase;
+    clip-path:var(--coupe-g);transform-origin:top right;animation:glisse .35s ease-out}
   @keyframes glisse{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 
   /* Annonce plein écran : BUT ! / MI-TEMPS / FIN */
   .annonce{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;pointer-events:none}
-  .annonce .boite{text-align:center;padding:10px 46px 14px;transform:skewX(-10deg);border-radius:6px;
-    box-shadow:0 12px 40px rgba(0,0,0,.5);animation:surgit .5s cubic-bezier(.2,1.6,.4,1)}
-  .annonce .boite > *{transform:skewX(10deg)}
-  .annonce .gros{font-size:clamp(30px,8vw,104px);font-weight:900;font-style:italic;line-height:1;letter-spacing:.02em}
-  .annonce .petit{font-size:clamp(14px,1.6vw,19px);font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
-  @keyframes surgit{from{opacity:0;transform:skewX(-10deg) scale(.3)}to{opacity:1;transform:skewX(-10deg) scale(1)}}
+  .annonce .boite{text-align:center;padding:8px 54px 14px;transform:skewX(-12deg);box-shadow:0 14px 44px rgba(0,0,0,.6);
+    animation:surgit .5s cubic-bezier(.2,1.6,.4,1)}
+  .annonce .boite > *{transform:skewX(12deg)}
+  .annonce .gros{font:italic 800 clamp(40px,10vw,136px)/1 var(--titre);letter-spacing:.02em;text-transform:uppercase}
+  .annonce .petit{font:700 clamp(15px,1.8vw,22px)/1.2 var(--titre);letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
+  @keyframes surgit{from{opacity:0;transform:skewX(-12deg) scale(.3)}to{opacity:1;transform:skewX(-12deg) scale(1)}}
 
   /* Bandeau bas (ce que le modèle vient de lire) */
-  .bandeau{position:absolute;left:12px;bottom:12px;z-index:3;max-width:min(640px,calc(100% - 24px));display:flex;
-    border-radius:6px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.45);animation:glisse .35s ease-out}
-  .bandeau .tag{background:var(--jaune);color:#111;font-weight:900;font-size:12px;letter-spacing:.06em;padding:8px 10px;
-    display:flex;align-items:center;text-transform:uppercase;white-space:nowrap}
-  .bandeau .txt{background:rgba(10,14,21,.9);padding:7px 12px;font-size:13.5px;min-width:0}
+  .bandeau{position:absolute;left:14px;bottom:14px;z-index:3;max-width:min(660px,calc(100% - 28px));display:flex;
+    box-shadow:0 8px 22px rgba(0,0,0,.5);animation:glisse .35s ease-out}
+  .bandeau .tag{background:var(--jaune);color:var(--navy);font:800 14px/1 var(--titre);letter-spacing:.08em;padding:9px 18px 9px 12px;
+    display:flex;align-items:center;text-transform:uppercase;white-space:nowrap;clip-path:var(--coupe)}
+  .bandeau .txt{background:rgba(5,8,15,.94);padding:7px 14px;font-size:13.5px;min-width:0}
+  .bandeau .txt b{font-family:var(--titre);font-size:17px}
   .bandeau .txt q{color:var(--doux);font-style:italic;quotes:"« " " »"}
-  .note-ecran{position:absolute;left:12px;top:12px;z-index:2;font-size:11.5px;color:rgba(255,255,255,.75);
-    background:rgba(0,0,0,.35);padding:3px 8px;border-radius:5px;max-width:calc(100% - 24px)}
+  .note-ecran{position:absolute;left:14px;top:14px;z-index:2;font:600 12px/1.2 var(--titre);letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(255,255,255,.8);background:rgba(5,8,15,.7);padding:4px 10px;max-width:calc(100% - 28px)}
 
-  /* Lecteur */
-  .lecteur{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px 14px;align-items:center;
-    background:var(--verre);border:1px solid var(--verre-bord);backdrop-filter:blur(6px);border-radius:12px;padding:9px 12px}
+  /* Lecteur : un panneau LED de bord de terrain */
+  .lecteur{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px 14px;align-items:center;padding:10px 14px;
+    background-color:#030406;background-image:radial-gradient(rgba(255,182,39,.10) 1px,transparent 1.3px);background-size:4px 4px;
+    border-top:2px solid #1c2433;border-bottom:2px solid #1c2433;box-shadow:inset 0 0 0 1px #000,0 10px 26px rgba(0,0,0,.55)}
+  .lecteur button,.lecteur select{background:transparent;color:var(--led);border:1px solid rgba(255,182,39,.3);
+    font:700 17px/1 var(--titre);letter-spacing:.06em;text-shadow:0 0 8px rgba(255,182,39,.55);padding:8px 10px}
+  .lecteur button:hover{background:rgba(255,182,39,.12)}
   .boutons{display:flex;gap:6px}
-  .boutons button{min-width:44px}
+  .boutons button{min-width:48px}
   .frise{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
-  .frise button{padding:6px 0;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.3)}
-  .frise button.passe{background:rgba(255,255,255,.14)}
-  .frise button.actif{background:var(--jaune);color:#111;border-color:var(--jaune)}
-  .reglages{display:flex;gap:12px;align-items:center;font-size:13px;color:var(--doux);flex-wrap:wrap}
-  .reglages label{display:flex;gap:6px;align-items:center;white-space:nowrap}
-  .reglages select{padding:5px 8px;font-size:13px}
+  .frise button{padding:8px 0;font-variant-numeric:tabular-nums}
+  .frise button.passe{color:#ffe3a3;background:rgba(255,182,39,.14)}
+  .frise button.actif{background:var(--led);color:#120c00;text-shadow:none;box-shadow:0 0 14px rgba(255,182,39,.8)}
+  .reglages{display:flex;gap:10px;align-items:center;font:700 14px/1 var(--titre);letter-spacing:.1em;text-transform:uppercase;color:var(--led)}
+  .reglages label{display:flex;gap:8px;align-items:center;white-space:nowrap}
+  .reglages select option{color:#111;background:#fff;text-shadow:none}
 
-  /* Panneau d'analyse */
-  .panneau{background:var(--verre);border:1px solid var(--verre-bord);backdrop-filter:blur(8px);border-radius:14px;padding:16px;
-    display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.9fr) minmax(0,1.1fr);gap:18px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
-  .panneau > *{min-width:0}
-  .panneau h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--doux);font-weight:700}
+  /* Panneau d'analyse : trois habillages télé */
+  .panneau{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.9fr) minmax(0,1.1fr);gap:12px}
+  .panneau > *{min-width:0;background:linear-gradient(180deg,#111d32,#0a1220);padding:0 16px 16px;position:relative;
+    border-top:4px solid transparent;border-image:linear-gradient(90deg,var(--c-dom),var(--c-ext)) 1;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .panneau h2{display:inline-block;margin:0 0 12px -16px;padding:8px 26px 7px 16px;background:#fff;color:var(--navy);
+    font:800 16px/1 var(--titre);letter-spacing:.09em;text-transform:uppercase;clip-path:var(--coupe)}
   .graphe svg{width:100%;height:auto;display:block}
-  .legende{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--doux);margin-top:6px}
-  .pastille{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
-  .chances{display:grid;gap:7px;margin-bottom:14px}
-  .chance{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:3px 10px;align-items:center}
-  .chance .nom{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .chance .val{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
-  .chance .jauge{grid-column:1 / -1;height:9px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
-  .chance .jauge span{display:block;height:100%;border-radius:5px;transition:width .5s ease}
-  .versus{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;text-align:center;
-    padding:10px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid var(--verre-bord)}
-  .versus .lib{font-size:11.5px;color:var(--doux);text-transform:uppercase;letter-spacing:.06em}
-  .versus .gros{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
-  .versus .vs{color:var(--doux);font-weight:700}
-  .verdict{text-align:center;font-size:13px;margin-top:7px;min-height:20px}
-  .bon{color:var(--ok);font-weight:700} .mauvais{color:var(--ko);font-weight:700}
-  .lecture{margin-top:10px;font-size:13px;color:var(--doux)}
+  .legende{display:flex;gap:14px;flex-wrap:wrap;font:600 14px/1.3 var(--titre);letter-spacing:.04em;text-transform:uppercase;color:var(--doux);margin-top:6px}
+  .pastille{display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:-1px;transform:skewX(-12deg)}
+  .chances{display:grid;gap:8px;margin-bottom:14px}
+  .chance{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:3px 10px;align-items:center}
+  .chance .nom{font:700 17px/1.2 var(--titre);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chance .val{text-align:right;font:800 20px/1 var(--titre);font-variant-numeric:tabular-nums}
+  .chance .jauge{grid-column:1 / -1;height:10px;background:rgba(255,255,255,.1);overflow:hidden;transform:skewX(-12deg)}
+  .chance .jauge span{display:block;height:100%;transition:width .5s ease}
+  .versus{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;text-align:center;padding:10px 8px;
+    background:#05080f;border-left:4px solid var(--jaune)}
+  .versus .lib{font:700 12px/1.2 var(--titre);color:var(--doux);text-transform:uppercase;letter-spacing:.12em}
+  .versus .gros{font:800 40px/1.05 var(--titre);font-variant-numeric:tabular-nums}
+  .versus .vs{font:800 16px/1 var(--titre);color:var(--jaune)}
+  .verdict{text-align:center;font:700 15px/1.3 var(--titre);letter-spacing:.05em;text-transform:uppercase;margin-top:8px;min-height:20px}
+  .bon{color:var(--ok);font-weight:800} .mauvais{color:var(--ko);font-weight:800}
+  .lecture{margin-top:10px;font-size:13.5px;color:var(--doux)}
   .lecture b{color:var(--txt)}
-  .onglets{display:flex;gap:6px;margin-bottom:8px}
-  .onglets button{font-size:12.5px;padding:5px 10px;border-radius:999px}
-  .onglets button[aria-selected="true"]{background:var(--txt);color:#111;border-color:var(--txt);font-weight:700}
-  .fil{list-style:none;margin:0;padding:0 4px 0 0;display:grid;gap:9px;max-height:300px;overflow:auto}
-  .fil li{display:grid;grid-template-columns:50px minmax(0,1fr);gap:8px;font-size:13.5px;align-items:start}
-  .fil .min{font-weight:800;font-variant-numeric:tabular-nums}
-  .fil .qui{font-weight:700}
+  .onglets{display:flex;gap:6px;margin-bottom:10px}
+  .onglets button{font:700 14px/1 var(--titre);letter-spacing:.07em;text-transform:uppercase;padding:8px 18px 8px 12px;background:#05080f;
+    border:0;color:var(--doux);clip-path:var(--coupe)}
+  .onglets button[aria-selected="true"]{background:var(--jaune);color:var(--navy)}
+  .fil{list-style:none;margin:0;padding:0 4px 0 0;display:grid;gap:10px;max-height:300px;overflow:auto}
+  .fil li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;font-size:13.5px;align-items:start}
+  .fil .min{font:800 17px/1.1 var(--titre);font-variant-numeric:tabular-nums;color:var(--jaune)}
+  .fil .qui{font:800 16px/1.2 var(--titre);letter-spacing:.04em;text-transform:uppercase}
   .fil q{display:block;color:var(--doux);font-style:italic;margin-top:2px;quotes:"« " " »"}
   .fil .appui{display:block;margin-top:3px;font-size:12.5px;color:var(--txt)}
   .fil .appui q{display:inline;color:var(--doux)}
   .note{font-size:12.5px;color:var(--doux)}
-  .carton{display:inline-block;width:9px;height:12px;border-radius:1.5px;vertical-align:-1px;margin-right:2px}
-
-  .modale{position:fixed;inset:0;z-index:9;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
-  .modale .boite{background:#101a15;border:1px solid var(--verre-bord);border-radius:14px;padding:18px;width:min(760px,100%);
-    max-height:90vh;overflow:auto}
-  table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
-  th,td{padding:6px 8px;border-bottom:1px solid var(--verre-bord);text-align:right}
+  .carton{display:inline-block;width:9px;height:12px;border-radius:1px;vertical-align:-1px;margin-right:2px}
+  table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--trait);text-align:right}
   th:first-child,td:first-child{text-align:left}
-  th{color:var(--doux);font-weight:600}
+  th{font:700 13px/1.2 var(--titre);letter-spacing:.1em;text-transform:uppercase;color:var(--jaune)}
+
+  /* Navigation entre les pages : deux ballons numérotés */
+  .pages{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:8;display:flex;flex-direction:column;gap:14px}
+  .ballon{width:52px;height:52px;padding:0;border:0;border-radius:50%;background:none;position:relative;
+    filter:drop-shadow(0 4px 8px rgba(0,0,0,.6));opacity:.72;transition:transform .25s,opacity .25s}
+  .ballon svg{width:100%;height:100%;display:block}
+  .ballon:hover{opacity:1;transform:rotate(-20deg)}
+  .ballon[aria-current="page"]{opacity:1;transform:scale(1.1)}
+  .ballon[aria-current="page"]::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--jaune)}
+  .ballon:focus-visible{outline:2px solid var(--jaune);outline-offset:4px}
+  @media (min-width:721px){ .page{padding-left:86px} }
+
+  /* Page 2 : le projet, comme un programme de match */
+  .projet{max-width:1120px;gap:16px}
+  .p2-tete{padding:18px 0 4px;border-bottom:4px solid transparent;border-image:linear-gradient(90deg,var(--c-dom),var(--jaune),var(--c-ext)) 1}
+  .surtitre{display:inline-block;font:800 13px/1 var(--titre);letter-spacing:.2em;text-transform:uppercase;color:var(--navy);
+    background:var(--jaune);padding:6px 22px 6px 10px;clip-path:var(--coupe)}
+  .p2-tete h1{margin:12px 0 8px;font:italic 800 clamp(34px,6vw,64px)/1 var(--titre);text-transform:uppercase;letter-spacing:.01em}
+  .chapo{font-size:16.5px;color:var(--doux);max-width:780px;margin:0}
+  .chiffres{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:18px 0 16px}
+  .chiffre{background:#030406;background-image:radial-gradient(rgba(255,182,39,.09) 1px,transparent 1.3px);background-size:4px 4px;
+    border-left:4px solid var(--led);padding:12px 14px}
+  .chiffre b{display:block;font:800 34px/1.05 var(--titre);font-variant-numeric:tabular-nums;color:var(--led);text-shadow:0 0 12px rgba(255,182,39,.45)}
+  .chiffre span{font:600 14px/1.25 var(--titre);letter-spacing:.03em;text-transform:uppercase;color:var(--doux)}
+  .carte{background:linear-gradient(180deg,#111d32,#0a1220);padding:0 22px 18px;min-width:0;border-top:4px solid transparent;
+    border-image:linear-gradient(90deg,var(--c-dom),var(--c-ext)) 1;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .carte h2{display:inline-block;margin:0 0 14px -22px;padding:10px 30px 9px 22px;background:#fff;color:var(--navy);
+    font:800 22px/1 var(--titre);letter-spacing:.06em;text-transform:uppercase;clip-path:var(--coupe)}
+  .carte h3{margin:18px 0 8px;font:800 18px/1.2 var(--titre);letter-spacing:.05em;text-transform:uppercase;color:var(--jaune)}
+  .carte p{margin:0 0 10px;max-width:860px}
+  .carte ul{margin:0 0 10px;padding-left:20px}
+  .carte li{margin:3px 0}
+  .grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:8px 0 12px}
+  .bloc{padding:10px 14px;background:#05080f;border-left:4px solid var(--jaune);min-width:0}
+  .bloc b{display:block;margin-bottom:2px;font:800 17px/1.2 var(--titre);letter-spacing:.04em;text-transform:uppercase}
+  .bloc .petit{display:block;margin-top:4px;font-size:13px;color:var(--doux)}
+  .bloc q,.cas q{font-style:italic;quotes:"« " " »"}
+  .ok{color:var(--ok);font-weight:800} .ko{color:var(--ko);font-weight:800}
+  .chaine{list-style:none;margin:0;padding:0;display:grid;gap:8px;counter-reset:etape}
+  .chaine li{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;align-items:start;padding:10px 14px 10px 0;margin:0;background:#05080f}
+  .chaine li::before{counter-increment:etape;content:counter(etape);height:100%;min-height:34px;background:var(--jaune);color:var(--navy);
+    font:800 20px/1 var(--titre);display:flex;align-items:center;justify-content:center;clip-path:var(--coupe);margin:-10px 0}
+  .chaine b{font:800 17px/1.2 var(--titre);letter-spacing:.04em;text-transform:uppercase}
+  .chaine .petit{display:block;font-size:13px;color:var(--doux);margin-top:2px}
+  .tag{display:inline-block;font:800 11.5px/1 var(--titre);letter-spacing:.1em;text-transform:uppercase;padding:4px 10px 3px 7px;
+    margin-left:8px;vertical-align:2px;white-space:nowrap;clip-path:var(--coupe)}
+  .tag.ia{background:#2f6bff;color:#fff} .tag.kalman{background:#1fae5b;color:#fff}
+  .tag.proba{background:var(--jaune);color:var(--navy)} .tag.regles{background:#e8edf3;color:var(--navy)}
+  .methodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+  .methode{background:#05080f;border-left:4px solid var(--jaune);padding:12px 14px}
+  .methode b{font:800 17px/1.2 var(--titre);letter-spacing:.04em;text-transform:uppercase}
+  .methode p{margin:6px 0 0;font-size:13.5px;color:var(--doux)}
+  .methode em{font:700 12.5px/1 var(--titre);font-style:normal;letter-spacing:.1em;text-transform:uppercase;color:var(--jaune);margin-right:4px}
+  .tableau-p2{overflow-x:auto}
+  .fin-p2{text-align:center;padding:6px 0 20px}
+  .fin-p2 .gros-bouton{display:inline-flex}
 
   @media (prefers-reduced-motion:reduce){
-    .onglet,.annonce .boite,.bandeau{animation:none !important}
+    .onglet,.annonce .boite,.bandeau,.vague,.bokeh,.flashs circle,.fumi,.defile,.led-but text{animation:none !important}
     .chance .jauge span{transition:none}
   }
   @media (max-width:1100px){
@@ -152,52 +243,50 @@
     .panneau .colfil{grid-column:1 / -1}
     .lecteur{grid-template-columns:auto minmax(0,1fr)}
     .reglages{grid-column:1 / -1}
+    .entete{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}
+    .entete .gros-bouton{grid-column:1 / -1;justify-content:center}
   }
   @media (max-width:720px){
     .page{padding:12px 16px 16px}
-    .panneau{grid-template-columns:minmax(0,1fr);padding:14px}
+    .entete{grid-template-columns:minmax(0,1fr)}
+    .champ select,.gros-bouton{height:56px;font-size:19px}
+    .panneau{grid-template-columns:minmax(0,1fr)}
     .ecran{display:flex;flex-direction:column}
-    .ecran svg.terrain{height:auto;aspect-ratio:1100/720}
+    .ecran svg.terrain{height:auto;aspect-ratio:1100/848}
     .tableau{order:-1;position:relative;top:auto;right:auto;align-items:stretch;padding:8px 8px 0;filter:none}
-    .barre{height:34px}
-    .barre .eq{font-size:14px;padding:0 7px;gap:5px;flex:1;justify-content:center}
-    .barre .score{font-size:18px;padding:0 8px}
-    .barre .horloge{min-width:62px;font-size:14px;padding:0 7px}
-    .barre .comp{padding:0 6px;font-size:11px}
+    .barre{height:38px;clip-path:none}
+    .barre .eq{font-size:18px;padding:0 7px;gap:5px;flex:1;justify-content:center}
+    .barre .score{font-size:22px;padding:0 9px}
+    .barre .horloge{min-width:64px;font-size:17px;padding:0 7px}
+    .barre .comp{padding:0 8px;font-size:12px}
     .lu,.onglet{align-self:flex-end}
     .lecteur{grid-template-columns:minmax(0,1fr)}
     .boutons button{flex:1}
     .frise{grid-template-columns:repeat(6,minmax(0,1fr))}
-    #match{min-width:0;flex:1 1 100%;max-width:none}
-    .choix{width:100%}
-    .choix select#comp{flex:1 1 100%}
-    .choix button{flex:1}
-    .versus .gros{font-size:28px}
+    .versus .gros{font-size:32px}
     .bandeau{left:8px;right:8px;bottom:8px;max-width:none}
     .bandeau .txt{font-size:12.5px}
     .note-ecran{display:none}
-    .annonce .boite{padding:8px 22px 10px}
+    .annonce .boite{padding:8px 24px 10px}
+    .pages{left:auto;right:12px;top:auto;bottom:14px;transform:none;gap:10px}
+    .ballon{width:44px;height:44px}
+    .carte{padding:0 14px 14px}
+    .carte h2{margin-left:-14px}
+    .fin-p2{padding-bottom:70px}
   }
 </style>
 </head>
 <body>
 <div class="fond" aria-hidden="true"></div>
-<div class="page">
-  <header class="haut">
-    <div class="titre">
-      <b>Le match lu dans les commentaires</b>
-      <span id="infoMatch"></span>
-    </div>
-    <div class="choix">
-      <select id="comp" aria-label="Compétition"></select>
-      <select id="match" aria-label="Match"></select>
-      <button id="hasard" type="button">Match au hasard</button>
-      <button id="fiab" type="button">Fiabilité du modèle</button>
-    </div>
+<div class="page" id="page1">
+  <header class="entete">
+    <label class="champ"><span>Compétition</span><select id="comp"></select></label>
+    <label class="champ"><span>Match</span><select id="match"></select></label>
+    <button id="hasard" class="gros-bouton" type="button"><span aria-hidden="true">⚽</span> Match au hasard</button>
   </header>
 
   <section class="ecran" aria-label="Le terrain">
-    <svg class="terrain" id="terrain" viewBox="0 0 1100 720" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <svg class="terrain" id="terrain" viewBox="0 -64 1100 848" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
       <defs>
         <pattern id="rayures" x="25" width="150" height="10" patternUnits="userSpaceOnUse">
           <rect width="75" height="10" fill="#2f7d3b"/><rect x="75" width="75" height="10" fill="#2a7236"/>
@@ -205,8 +294,25 @@
         <pattern id="mailles" width="6" height="6" patternUnits="userSpaceOnUse">
           <path d="M0 0L6 6M6 0L0 6" stroke="#fff" stroke-opacity=".35" stroke-width=".8"/>
         </pattern>
+        <pattern id="ledPoints" width="3" height="3" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r=".6" fill="#fff" fill-opacity=".07"/></pattern>
+        <radialGradient id="projo"><stop offset="0" stop-color="#fffbe6" stop-opacity=".45"/><stop offset=".45" stop-color="#fffbe6" stop-opacity=".1"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/></radialGradient>
+        <radialGradient id="flamme"><stop offset="0" stop-color="#fff6c2"/><stop offset=".3" stop-color="#ff7a1f" stop-opacity=".95"/><stop offset=".7" stop-color="#ff2d00" stop-opacity=".35"/><stop offset="1" stop-color="#ff2d00" stop-opacity="0"/></radialGradient>
+        <clipPath id="clipLedHaut"><rect x="25" y="-2" width="1050" height="16"/></clipPath>
+        <clipPath id="clipLedBas"><rect x="25" y="706" width="1050" height="16"/></clipPath>
+        <linearGradient id="fondTribune" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#121b2b"/><stop offset="1" stop-color="#06090f"/></linearGradient>
+        <filter id="flou" x="-5%" y="-30%" width="110%" height="160%"><feGaussianBlur stdDeviation="2.6"/></filter>
+        <pattern id="cartons" width="12" height="9" patternUnits="userSpaceOnUse"><path d="M12 0V9M0 9H12" stroke="#000" stroke-opacity=".4" stroke-width="1.3"/></pattern>
+        <linearGradient id="vagueGrad"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
       </defs>
-      <rect x="-3000" y="-2000" width="7100" height="4720" fill="url(#rayures)"/>
+      <rect x="-3000" y="-2000" width="7100" height="4800" fill="#090e17"/>
+      <g id="tribunes"></g>
+      <g id="projecteurs"><circle cx="-150" cy="-140" r="460" fill="url(#projo)"/><circle cx="1250" cy="-140" r="460" fill="url(#projo)"/>
+        <circle cx="-150" cy="860" r="460" fill="url(#projo)"/><circle cx="1250" cy="860" r="460" fill="url(#projo)"/></g>
+      <rect x="-14" y="16" width="1128" height="688" fill="url(#rayures)"/>
+      <g id="leds">
+        <g clip-path="url(#clipLedHaut)"><rect x="25" y="-2" width="1050" height="16" fill="#030406"/><rect x="25" y="-2" width="1050" height="16" fill="url(#ledPoints)"/><g id="ledHaut"></g></g>
+        <g clip-path="url(#clipLedBas)"><rect x="25" y="706" width="1050" height="16" fill="#030406"/><rect x="25" y="706" width="1050" height="16" fill="url(#ledPoints)"/><g id="ledBas"></g></g>
+      </g>
       <g fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="3">
         <rect x="25" y="20" width="1050" height="680"/>
         <line x1="550" y1="20" x2="550" y2="700"/>
@@ -253,7 +359,6 @@
     <div class="frise" id="frise"></div>
     <div class="reglages">
       <label>Vitesse <select id="vitesse"><option value="0">×1</option><option value="1" selected>×2</option><option value="2">×4</option></select></label>
-      <label><input type="checkbox" id="suspense"> Mode suspense</label>
     </div>
   </nav>
 
@@ -284,17 +389,127 @@
   </main>
 </div>
 
-<div class="modale" id="modale" hidden>
-  <div class="boite" role="dialog" aria-labelledby="titreFiab">
-    <h2 style="margin-top:0" id="titreFiab">Fiabilité du modèle</h2>
-    <p class="note">Chaque match est prédit par un modèle qui ne l'a jamais vu (validation croisée sur les matchs annotés par SoccerNet).
-      « Bon résultat » : le résultat le plus probable est le bon. Repère : prédire toujours la victoire à domicile donne <b id="repere"></b>.</p>
-    <table id="tabFiab"></table>
-    <p class="note" id="noteFiab"></p>
-    <p class="note">Les petits joueurs sont une illustration : ils rejouent les actions annotées par SoccerNet (buts, tirs, corners,
-      touches, cartons) au bon moment, mais leurs positions sont inventées. Ces annotations ne servent jamais à prédire.</p>
-    <p style="text-align:right;margin-bottom:0"><button id="fermer" type="button">Fermer</button></p>
-  </div>
+<nav class="pages" aria-label="Pages">
+  <button type="button" class="ballon" data-page="1" aria-label="Page 1 : le match en direct" aria-current="page"></button>
+  <button type="button" class="ballon" data-page="2" aria-label="Page 2 : le projet expliqué" aria-current="false"></button>
+</nav>
+
+<div class="page projet" id="page2" hidden>
+  <header class="p2-tete">
+    <span class="surtitre">Projet NLP · SoccerNet-Echoes · page 2</span>
+    <h1>Lire un match de foot dans ses commentaires</h1>
+    <p class="chapo">Peut-on suivre un match uniquement en lisant ce que disent les commentateurs ? Le programme retrouve les buts
+      dans les commentaires transcrits de 367 matchs, puis prédit le vainqueur et le score minute après minute.</p>
+    <div class="chiffres" id="p2Chiffres"></div>
+  </header>
+
+  <section class="carte" aria-labelledby="t-probleme">
+    <h2 id="t-probleme">La problématique</h2>
+    <p>En anglais, « goal » veut dire à la fois <b>un but marqué</b> et <b>la cage</b>. Le mot revient 43 fois par match pour
+      3,4 vrais buts : prendre chaque « goal » pour un but donne 16 faux buts par match.</p>
+    <div class="grille">
+      <div class="bloc"><q>Goal! Goal for Real Madrid!</q><span class="petit"><span class="ok">✔ un but</span> : il vient d'être marqué</span></div>
+      <div class="bloc"><q>the ball goes wide of Courtois's goal</q><span class="petit"><span class="ko">✘ la cage</span> du gardien Courtois</span></div>
+      <div class="bloc"><q>shot on goal</q>, <q>goal kick</q><span class="petit"><span class="ko">✘ la cage</span> : un tir, un six-mètres</span></div>
+      <div class="bloc"><q>his tenth goal of the season</q><span class="petit"><span class="ko">✘ un souvenir</span> : une statistique, pas ce match</span></div>
+    </div>
+    <p>Deux difficultés s'ajoutent. Le texte est <b>oral, transcrit automatiquement</b> (Whisper) et souvent <b>traduit</b>
+      (un match allemand donne par exemple <q>VEDER SHAR-STARR- alumnus pear E5AS interval. 0-1-clear</q>). Et près de la moitié des
+      scores prononcés (« 2-1 ») ne sont pas le score du moment : schémas tactiques, autres matchs, souvenirs.</p>
+  </section>
+
+  <section class="carte" aria-labelledby="t-donnees">
+    <h2 id="t-donnees">Les données</h2>
+    <div class="grille">
+      <div class="bloc"><b>Les commentaires</b><span class="petit">SoccerNet-Echoes (Hugging Face) : audio transcrit par Whisper puis traduit en anglais.
+        634 346 segments de phrase, 367 matchs, 6 compétitions, saisons 2014-2017.</span></div>
+      <div class="bloc"><b>Les buts annotés</b><span class="petit">SoccerNet Labels-v2 : 1 137 buts (minute, équipe) dans les 330 matchs annotés.
+        C'est la vérité terrain : elle sert à apprendre et à évaluer, jamais à prédire.</span></div>
+      <div class="bloc"><b>Les compositions</b><span class="petit">SoccerNet Labels-caption : joueurs et gardien titulaire de chaque équipe,
+        pour reconnaître les noms propres dans le texte.</span></div>
+    </div>
+    <p class="note">Pour ne pas tricher, le modèle ne lit jamais la liste des buts et cartons des compositions, ni les actions annotées,
+      ni les matchs postérieurs. Chaque match est jugé par un modèle qui ne l'a jamais vu (validation croisée en 5 plis).</p>
+  </section>
+
+  <section class="carte" aria-labelledby="t-chaine">
+    <h2 id="t-chaine">Ce que fait le programme</h2>
+    <ol class="chaine">
+      <li><div><b>Nettoyer et reconnaître les noms</b><span class="tag regles">règles</span><span class="petit">Minuscules, scores « 2-1 » repérés (mais pas « 4-3-3 »),
+        et chaque nom propre remplacé par son rôle : « Courtois's goal » devient « &lt;gardien&gt;'s goal ».</span></div></li>
+      <li><div><b>Repérer les mentions</b><span class="tag regles">règles</span><span class="petit">Chaque endroit qui peut annoncer un but : goal, scores, net, equaliser,
+        un score prononcé, et des tournures sans mot-clé (« the ball is in », « takes the lead », « goes crazy »). 85 par match.</span></div></li>
+      <li><div><b>Étape 1 : le sens de chaque mention</b><span class="tag ia">IA</span><span class="petit">Régression logistique sur les mots typés autour de la mention,
+        plus la lecture du passage par DistilRoBERTa (un modèle de la famille BERT). Elle donne la probabilité d'une annonce de but.</span></div></li>
+      <li><div><b>Étape 2 : vérifier chaque rafale</b><span class="tag ia">IA</span><span class="petit">Un vrai but déclenche une rafale d'annonces. Un gradient boosting
+        d'arbres juge chaque rafale entière à partir de 17 indices (annonces répétées, exclamations, score prononcé nouveau…).</span></div></li>
+      <li><div><b>Juger les scores prononcés</b><span class="tag ia">IA</span><span class="petit">Un classifieur dit si chaque « 2-1 » entendu est le score du moment,
+        le score inversé, ou du bruit.</span></div></li>
+      <li><div><b>Lire le score en probabilités</b><span class="tag proba">probabilités</span><span class="petit">Un modèle de Markov caché lit le match dans l'ordre
+        sur les 121 scores possibles (0-0 à 10-10). L'algorithme de Viterbi dit ensuite quels passages sont les buts.</span></div></li>
+      <li><div><b>Prédire la suite</b><span class="tag kalman">Kalman</span><span class="tag proba">Poisson</span><span class="petit">La force des équipes vient d'un filtre
+        de Kalman sur leurs matchs précédents ; les buts restants suivent une loi de Poisson. On en tire les chances de victoire et un pronostic.</span></div></li>
+      <li><div><b>Montrer</b><span class="petit">La page 1 rejoue le match à la télé : le gros score est celui que lit le modèle, le vrai score est en petit.</span></div></li>
+    </ol>
+  </section>
+
+  <section class="carte" aria-labelledby="t-bert">
+    <h2 id="t-bert">Les modèles de langue (BERT)</h2>
+    <div class="grille">
+      <div class="bloc"><b>DistilRoBERTa <span class="tag ia">retenu</span></b><span class="petit"><code>distilroberta-base</code> : version allégée de RoBERTa
+        (Hugging Face), 6 couches, environ 82 millions de paramètres.</span></div>
+      <div class="bloc"><b>BERT de base <span class="tag regles">comparé</span></b><span class="petit"><code>bert-base-uncased</code> (Google), 12 couches,
+        environ 110 millions de paramètres. Un peu moins bon ici et deux fois plus lent.</span></div>
+      <div class="bloc"><b>Whisper <span class="tag regles">en amont</span></b><span class="petit">Le modèle d'OpenAI qui a transcrit et traduit l'audio.
+        Les auteurs du jeu de données l'ont fait tourner : ses erreurs sont notre bruit.</span></div>
+    </div>
+    <h3>Comment on s'en sert</h3>
+    <p>Le modèle sert de lecteur, sans ré-entraînement. On lui donne 24 mots de chaque côté de la mention, avec les rôles écrits en clair
+      (« goalkeeper 's goal »). On garde 1 536 nombres : le vecteur du mot visé et la moyenne du passage (2 × 768). Ils s'ajoutent aux mots
+      typés dans la régression logistique de l'étape 1.</p>
+    <div class="tableau-p2"><table>
+      <tr><th>Ce que lit l'étape 1</th><th>AUC (0,5 = hasard, 1 = parfait)</th></tr>
+      <tr><td>Mots typés seuls</td><td>0,855</td></tr>
+      <tr><td>BERT de base seul</td><td>0,818</td></tr>
+      <tr><td>DistilRoBERTa seul</td><td>0,828</td></tr>
+      <tr><td>Mots typés + BERT de base</td><td>0,877</td></tr>
+      <tr><td><b>Mots typés + DistilRoBERTa</b></td><td><b>0,884</b></td></tr>
+    </table></div>
+    <p class="note">Seul, le modèle de langue fait moins bien que nos mots typés ; ensemble, ils font mieux. Il apporte le sens du passage,
+      les mots typés apportent les rôles (gardien, joueur). Pas de ré-entraînement : l'accélération graphique du Mac plante avec macOS 14,
+      et le faire sur le processeur prendrait des heures.</p>
+  </section>
+
+  <section class="carte" aria-labelledby="t-methodes">
+    <h2 id="t-methodes">Les méthodes : pourquoi, comment</h2>
+    <div class="methodes">
+      <div class="methode"><b>Typage des noms propres</b><span class="tag regles">règles</span><p><em>Pourquoi</em> apprendre « la cage d'un gardien » une seule fois, quel que soit le gardien du match.</p><p><em>Comment</em> les noms des compositions officielles deviennent &lt;gardien&gt;, &lt;joueur&gt; ou &lt;equipe&gt; dans le texte.</p></div>
+      <div class="methode"><b>Supervision à distance</b><span class="tag regles">données</span><p><em>Pourquoi</em> personne n'a étiqueté à la main les 31 000 mentions.</p><p><em>Comment</em> une mention prononcée juste après un but annoté devient une annonce ; loin de tout but, elle a un autre sens.</p></div>
+      <div class="methode"><b>Régression logistique</b><span class="tag ia">IA</span><p><em>Pourquoi</em> rapide, lisible (on voit quels mots comptent) et à l'aise avec des milliers d'indices.</p><p><em>Comment</em> chaque mot autour de la mention a un poids ; leur somme donne la probabilité d'une annonce de but.</p></div>
+      <div class="methode"><b>DistilRoBERTa (BERT)</b><span class="tag ia">IA</span><p><em>Pourquoi</em> saisir le sens d'un passage au-delà des mots-clés.</p><p><em>Comment</em> le modèle pré-entraîné lit 24 mots de chaque côté et rend 1 536 nombres, ajoutés aux indices de la régression.</p></div>
+      <div class="methode"><b>Gradient boosting d'arbres</b><span class="tag ia">IA</span><p><em>Pourquoi</em> un vrai but se reconnaît à une combinaison d'indices (annonces répétées, score nouveau, exclamations).</p><p><em>Comment</em> 300 petits arbres de décision ; chacun corrige les erreurs des précédents.</p></div>
+      <div class="methode"><b>Modèle de Markov caché</b><span class="tag proba">probabilités</span><p><em>Pourquoi</em> combiner des indices incertains dans l'ordre du match, sans jamais revenir en arrière sur un but.</p><p><em>Comment</em> une probabilité pour chacun des 121 scores possibles, mise à jour à chaque annonce et à chaque score prononcé.</p></div>
+      <div class="methode"><b>Algorithme de Viterbi</b><span class="tag proba">probabilités</span><p><em>Pourquoi</em> montrer quels passages ont fait compter chaque but.</p><p><em>Comment</em> il retrouve le chemin le plus probable de 0-0 jusqu'au score lu.</p></div>
+      <div class="methode"><b>Filtre de Kalman</b><span class="tag kalman">Kalman</span><p><em>Pourquoi</em> les équipes ont peu de matchs connus : il faut apprendre vite au début, puis de moins en moins.</p><p><em>Comment</em> chaque équipe a une force et une incertitude ; après un match, elle corrige sa force d'une part de la surprise, plus grande si on la connaît mal.</p></div>
+      <div class="methode"><b>Loi de Poisson</b><span class="tag proba">probabilités</span><p><em>Pourquoi</em> les buts sont des événements rares et à peu près indépendants.</p><p><em>Comment</em> buts attendus × part du temps restant donnent la probabilité de 0, 1, 2… buts de plus.</p></div>
+      <div class="methode"><b>Validation croisée par match</b><span class="tag regles">évaluation</span><p><em>Pourquoi</em> ne jamais juger un match avec un modèle qui l'a déjà vu.</p><p><em>Comment</em> 5 groupes de matchs ; chacun est prédit par un modèle entraîné sur les 4 autres.</p></div>
+    </div>
+  </section>
+
+  <section class="carte" aria-labelledby="t-resultats">
+    <h2 id="t-resultats">Résultats et limites</h2>
+    <div class="tableau-p2" id="p2Resultats"></div>
+    <h3>Limites</h3>
+    <ul>
+      <li>Environ 4 buts sur 10 ne sont pas annoncés assez clairement pour être repérés seuls, surtout dans les commentaires traduits.
+        Le score passe alors par les scores prononcés, souvent plusieurs minutes plus tard.</li>
+      <li>Le modèle de langue n'est pas ré-entraîné sur nos données.</li>
+      <li>Marges d'erreur : environ ± 3 points sur 330 matchs, ± 8 points sur les 37 matchs jamais annotés.</li>
+      <li>Les petits joueurs de la page 1 sont une illustration : leurs positions sont inventées.</li>
+    </ul>
+  </section>
+
+  <div class="fin-p2"><button type="button" id="versPage1" class="gros-bouton"><span aria-hidden="true">⚽</span> Revoir le match</button></div>
 </div>
 
 <script>
@@ -362,7 +577,7 @@ function horloge() {
 }
 const minuteTexte = ev => { const m = Math.floor(ev.t) + 1;
   return ev.mt === 1 ? (m <= 45 ? m + "'" : '45+' + (m - 45) + "'") : (m <= 45 ? (45 + m) + "'" : '90+' + (m - 45) + "'"); };
-const modeLu = () => $('suspense').checked || !M.evenements;
+const modeLu = () => !M.evenements;   // match sans annotation : le terrain rejoue ce que lit le modèle
 const nomEq = e => e === 0 ? M.dom.nom : M.ext.nom;
 
 /* ============================== Le terrain et les joueurs ============================== */
@@ -388,8 +603,8 @@ function creerJoueurs() {
   for (const e of [0, 1]) FORME.forEach(([u, v, n], i) => {
     const el = document.createElementNS(NS, 'g');
     const gk = i === 0, kit = gk ? C.gardien[e] : C.maillot[e];
-    el.innerHTML = `<ellipse rx="15" ry="5.5" cy="14" fill="rgba(0,0,0,.3)"/><circle r="15" fill="${kit}" stroke="${gk ? '#222' : C.bord[e]}" stroke-width="2.5"/>` +
-      `<text y="5.2" text-anchor="middle" font-size="15" font-weight="800" font-family="system-ui,sans-serif" fill="${gk ? '#111' : C.numero[e]}">${n}</text>`;
+    el.innerHTML = `<ellipse rx="17" ry="6" cy="16" fill="rgba(0,0,0,.35)"/><circle r="17" fill="${kit}" stroke="${gk ? '#222' : C.bord[e]}" stroke-width="2.8"/>` +
+      `<text y="6" text-anchor="middle" font-size="18" font-weight="800" font-family="Barlow Condensed,DIN Condensed,Arial Narrow,sans-serif" fill="${gk ? '#111' : C.numero[e]}">${n}</text>`;
     g.appendChild(el);
     J[e].push({x: versX(e, u), y: versY(e, v), vx: 0, vy: 0, u, v, n, gk, actif: true, fixe: null, el,
                phase: Math.random() * 6.28, sortie: false});
@@ -561,6 +776,79 @@ function dessiner() {
   $('balle').setAttribute('transform', `translate(${BAL.x.toFixed(1)},${(BAL.y - BAL.z).toFixed(1)}) scale(${(1 + BAL.z / 70).toFixed(3)})`);
 }
 
+/* ============================== Le stade : supporters et panneaux LED ============================== */
+let minuteurLed = null;
+const minuteurFete = [null, null];
+let graineStade = 7;
+const alea = () => (graineStade = (graineStade * 16807) % 2147483647) / 2147483647;   // même tirage à chaque affichage
+const vives = eq => lum(eq.c1) < .05 ? [eq.c2, '#ffffff'] : [eq.c1, lum(eq.c2) < .05 ? '#ffffff' : eq.c2];
+function tifo(eq, x0, w, cote) {
+  // une chorégraphie de cartons : bandes en biais aux deux couleurs, un bandeau au nom du club, la grille des cartons
+  const [a, b] = [eq.c1, eq.c2], y0 = -64, h = 848, centre = cote ? 1134 + 330 : -34 - 330;
+  const lettres = lum(a) < .05 ? b : (lum(b) > .8 && lum(a) > .5 ? '#0b1424' : b);
+  let s = `<clipPath id="clipTifo${cote}"><rect x="${x0}" y="${y0}" width="${w}" height="${h}"/></clipPath><g clip-path="url(#clipTifo${cote})">`;
+  for (let x = x0 - 300, i = 0; x < x0 + w + 300; x += 70, i++)
+    s += `<rect x="${x}" y="${y0}" width="70" height="${h}" fill="${i % 2 ? a : b}" transform="skewX(-18)"/>`;
+  s += `<rect x="${x0}" y="236" width="${w}" height="248" fill="${a}"/><rect x="${x0}" y="236" width="${w}" height="8" fill="${b}"/>` +
+    `<rect x="${x0}" y="476" width="${w}" height="8" fill="${b}"/>` +
+    `<text x="${centre}" y="420" text-anchor="middle" font-family="Barlow Condensed,DIN Condensed,Arial Narrow,sans-serif" font-style="italic" ` +
+    `font-weight="800" font-size="190" letter-spacing="10" fill="${lettres}">${esc(eq.code)}</text>`;
+  const depart = cote ? x0 + 1000 : x0 + w - 1000;
+  s += `<rect class="vague" x="${depart}" y="${y0}" width="200" height="${h}" fill="url(#vagueGrad)" style="--dx:${cote ? -1000 : 1000}px"/>`;
+  return s + `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="url(#cartons)"/></g>`;
+}
+function lumieres(eq, x0, y0, w, h) {
+  // la foule floue, vue par une caméra qui fait la mise au point sur le terrain, et les flashs des téléphones
+  const [a, b] = vives(eq);
+  let s = `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="url(#fondTribune)"/><g class="bokeh" filter="url(#flou)">`;
+  for (let i = 0, n = Math.round(w * h / 680); i < n; i++) {
+    const c = alea() < .6 ? a : (alea() < .7 ? b : '#fff3d6');
+    s += `<circle cx="${(x0 + alea() * w).toFixed(1)}" cy="${(y0 + alea() * h).toFixed(1)}" r="${(2 + alea() * 5).toFixed(1)}" fill="${c}" opacity="${(.2 + alea() * .5).toFixed(2)}"/>`;
+  }
+  s += '</g><g class="flashs">';
+  for (let i = 0, n = Math.round(w * h / 4500); i < n; i++)
+    s += `<circle cx="${(x0 + alea() * w).toFixed(1)}" cy="${(y0 + alea() * h).toFixed(1)}" r="1.6" fill="#fff" ` +
+      `style="animation-delay:${(-alea() * 4).toFixed(2)}s;animation-duration:${(2 + alea() * 3).toFixed(1)}s"/>`;
+  return s + '</g>';
+}
+function construireStade() {
+  // tifo dans les virages (domicile à gauche, visiteurs à droite) ; lumières dans les tribunes le long des touches
+  graineStade = 7;
+  const eq = [M.dom, M.ext];
+  const fumi = (x, y) => `<circle class="fumi" cx="${x}" cy="${y}" r="34" fill="url(#flamme)"/>`;
+  $('tribunes').innerHTML =
+    `<g id="supporters0">${tifo(eq[0], -2600, 2566, 0)}${lumieres(eq[0], -30, -62, 870, 54)}${lumieres(eq[0], -30, 730, 1160, 54)}` +
+      `${[[-170, 120], [-330, 610], [-470, 380]].map(([x, y]) => fumi(x, y)).join('')}</g>` +
+    `<g id="supporters1">${tifo(eq[1], 1134, 2566, 1)}${lumieres(eq[1], 840, -62, 290, 54)}` +
+      `${[[1230, 140], [1390, 600], [1520, 360]].map(([x, y]) => fumi(x, y)).join('')}</g>`;
+}
+function fete(e) {
+  // chez l'équipe qui marque : la vague traverse le tifo, la foule s'illumine, les flashs crépitent, les fumigènes s'allument
+  ledBut(e);
+  if (REDUIT) return;
+  const g = $('supporters' + e);
+  if (!g) return;
+  g.classList.add('fete');
+  clearTimeout(minuteurFete[e]);
+  minuteurFete[e] = setTimeout(() => g.classList.remove('fete'), 5500);
+}
+function ledTexte(texte, couleur, but) {
+  for (const [id, y] of [['ledHaut', 10.5], ['ledBas', 718.5]]) {
+    const g = $(id);
+    g.innerHTML = `<g class="defile${but ? ' led-but' : ''}"><text x="25" y="${y}" font-family="Barlow Condensed,DIN Condensed,Arial Narrow,sans-serif" ` +
+      `font-weight="800" font-size="12" letter-spacing="2" fill="${couleur}">${esc(texte.repeat(12))}</text></g>`;
+    try {   // le texte défile d'exactement une répétition par tour : la boucle ne se voit pas
+      const L = g.querySelector('text').getComputedTextLength() / 12, d = g.querySelector('.defile');
+      if (L > 0) { d.style.setProperty('--d', `${-L}px`); d.style.animationDuration = `${(L / 45).toFixed(1)}s`; }
+    } catch (err) {}
+  }
+}
+function ledNormal() { ledTexte(`SOCCERNET-ECHOES  ·  ${M.dom.code} – ${M.ext.code}  ·  LE MATCH LU DANS LES COMMENTAIRES  ·  `, '#ffb627'); }
+function ledBut(e) {
+  ledTexte(`BUT !  ${nomEq(e).toUpperCase()}  ·  `, C.ligne[e], true);
+  clearTimeout(minuteurLed); minuteurLed = setTimeout(ledNormal, 5500);
+}
+
 /* ============================== Les actions du match (scripts) ============================== */
 const butAdverse = (e, dy = 0) => ({x: sens[e] > 0 ? X1 + 10 : X0 - 10, y: CY + dy});
 const ligneBut = (e, dy) => ({x: sens[e] > 0 ? X1 - 4 : X0 + 4, y: CY + dy});
@@ -591,6 +879,7 @@ function marquer(e, info) {
   Object.assign(BAL, {mode: 'mort', vol: null});
   const filet = $(sens[e] > 0 ? 'filetD' : 'filetG');
   filet.setAttribute('stroke', C.ligne[e]); setTimeout(() => filet.setAttribute('stroke', '#fff'), 1400);
+  fete(e);
   if (info.ev) {
     scoreVu[e]++;
     majTableau();
@@ -719,7 +1008,7 @@ function scriptCarton(e, code, ev) {
 function declencher(ev) {
   if (ev.eq < 0 && 'BJRYXPSWCTFO'.includes(ev.code)) return;
   if (REDUIT) {   // préférence « réduire les animations » : on ne garde que le tableau et les annonces
-    if (ev.code === 'B') { scoreVu[ev.eq]++; ongletTableau(`⚽ But · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, C.ligne[ev.eq]); }
+    if (ev.code === 'B') { scoreVu[ev.eq]++; fete(ev.eq); ongletTableau(`⚽ But · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, C.ligne[ev.eq]); }
     else if ('JRY'.includes(ev.code)) {
       if (ev.code !== 'J') rougesVus[ev.eq]++;
       ongletTableau(`${ev.code === 'J' ? 'Carton jaune' : 'Carton rouge'} · ${esc(nomEq(ev.eq))} · ${minuteTexte(ev)}`, ev.code === 'J' ? '#ffd54a' : '#e5202e', true);
@@ -782,7 +1071,7 @@ function etape(dtr) {   // une image : dtr secondes réelles
 }
 function boucle(maintenant) {
   const dtr = Math.min(.05, (maintenant - dernier) / 1000); dernier = maintenant;
-  if (M) etape(dtr);
+  if (M && pageCourante === 1) etape(dtr);   // l'animation dort sur la page 2
   requestAnimationFrame(boucle);
 }
 function avancer(dtr) {
@@ -810,7 +1099,7 @@ function nouveauPoint() {
   const dernierBut = pt.buts[pt.buts.length - 1];
   const extraitTxt = dernierBut ? ` · <q>${esc(dernierBut.cite ? dernierBut.cite.texte : dernierBut.texte)}</q>` : '';
   bandeau('Le modèle lit', `<b>${sc(pt.cour)}</b>${extraitTxt}`);
-  // en mode suspense, le terrain rejoue le but tel que le modèle le lit ; sinon le gros score change tout de suite
+  // match sans annotation : le terrain rejoue le but tel que le modèle le lit ; sinon le gros score change tout de suite
   if (modeLu() && lecture && !REDUIT && (d[0] > 0 || d[1] > 0)) scriptBut(d[0] > 0 ? 0 : 1, {modele: true, score: pt.cour.slice()});
   else { scoreLu = pt.cour.slice(); majTableau(); eclat(); }
 }
@@ -828,11 +1117,10 @@ function miTemps() {
 function finDuMatch() {
   lecture = false; finale = true; annuler(); occupe = true; bloque = false;
   $('play').textContent = '▶'; $('play').setAttribute('aria-label', 'Lecture');
-  const cache = $('suspense').checked;
   scoreLu = M.points[11].cour.slice();
   if (!M.reel) scoreVu = M.final.slice();
   majTableau(); majPanneau();
-  annonce('FIN DU MATCH', `lu par le modèle ${sc(scoreLu)}${cache ? '' : ` · vrai score ${sc(M.final)}`}`, '#e8edf3', 0);
+  annonce('FIN DU MATCH', `lu par le modèle ${sc(scoreLu)} · vrai score ${sc(M.final)}`, '#e8edf3', 0);
   poseRepos(false);
 }
 function lancer() {
@@ -869,6 +1157,7 @@ function aller(i, annoncer = false) {
       if (e >= 0) {
         const buts = EV.filter(x => x.code === 'B' && x.eq === e && x.tau < T && x.tau >= TP[avant]);
         annonce('BUT !', `${nomEq(e)}${buts.length ? ' · ' + buts.map(minuteTexte).join(', ') : ''} · vrai score ${sc(M.reel[i])}`, C.ligne[e], 2200);
+        fete(e);
       }
     }
     const pt = M.points[i], pa = M.points[avant];
@@ -890,17 +1179,16 @@ function majHorloge() {
   $('tAdd').textContent = h.add; $('tAdd').hidden = !h.add;
 }
 function majTableau() {
-  // en gros : ce que le modèle lit dans les commentaires ; en petit : le vrai score (caché en mode suspense)
-  const cache = $('suspense').checked;
+  // en gros : ce que le modèle lit dans les commentaires ; en petit : le vrai score
   $('sDom').textContent = scoreLu[0]; $('sExt').textContent = scoreLu[1];
   $('rDom').innerHTML = '<i></i>'.repeat(modeLu() ? 0 : rougesVus[0]);
   $('rExt').innerHTML = '<i></i>'.repeat(modeLu() ? 0 : rougesVus[1]);
   const fin = k === 11 || finale;
-  $('tLuLib').textContent = !M.reel && fin && !cache ? 'Vrai score final' : 'Vrai score';
-  $('tLu').textContent = cache ? 'caché' : (scoreVu ? sc(scoreVu) : 'inconnu');
+  $('tLuLib').textContent = !M.reel && fin ? 'Vrai score final' : 'Vrai score';
+  $('tLu').textContent = scoreVu ? sc(scoreVu) : 'inconnu';
 }
 function majPanneau() {
-  const pt = M.points[k], nom = D.points[k], fin = k === 11, cache = $('suspense').checked;
+  const pt = M.points[k], nom = D.points[k], fin = k === 11;
   document.querySelectorAll('#frise button').forEach((b, i) => {
     b.classList.toggle('actif', i === k); b.classList.toggle('passe', i < k);
     b.setAttribute('aria-current', i === k ? 'step' : 'false');
@@ -910,12 +1198,12 @@ function majPanneau() {
   $('chances').innerHTML = pt.p.map((v, i) => `<div class="chance"><span class="nom">${esc(noms[i])}</span>
       <span class="val">${pct(v)}</span><div class="jauge"><span style="width:${v * 100}%;background:${coul[i]}"></span></div></div>`).join('');
   $('prono').innerHTML = `<span style="color:${C.ligne[0]}">${pt.prono[0]}</span> – <span style="color:${C.ligne[1]}">${pt.prono[1]}</span>`;
-  $('final').textContent = cache ? '? – ?' : sc(M.final);
+  $('final').textContent = sc(M.final);
   const issue = Math.sign(M.final[0] - M.final[1]);
   const fav = [1, 0, -1][pt.p.indexOf(Math.max(...pt.p))];
   const exact = pt.prono[0] === M.final[0] && pt.prono[1] === M.final[1];
-  $('verdict').innerHTML = cache ? '' : (exact ? '<span class="bon">✔ Score exact</span>'
-    : fav === issue ? '<span class="bon">✔ Bon vainqueur</span> · score différent' : '<span class="mauvais">✘ Mauvais vainqueur</span>');
+  $('verdict').innerHTML = exact ? '<span class="bon">✔ Score exact</span>'
+    : fav === issue ? '<span class="bon">✔ Bon vainqueur</span> · score différent' : '<span class="mauvais">✘ Mauvais vainqueur</span>';
   $('lecture').innerHTML = k === 0
     ? `Rien n'est encore dit. Les chances viennent de la force des équipes, estimée par un filtre de Kalman sur leurs matchs précédents (buts par match de plus qu'une équipe moyenne) : ${esc(M.dom.nom)} <b>${signe(M.force[0][0])} ± ${fr1(M.force[0][1])}</b>, ${esc(M.ext.nom)} <b>${signe(M.force[1][0])} ± ${fr1(M.force[1][1])}</b>, avantage du terrain <b>${signe(M.terrain)}</b>. Soit <b>${fr1(M.buts_attendus[0])} – ${fr1(M.buts_attendus[1])}</b> buts attendus.`
     : `Le modèle a lu <b>${sc(pt.cour)}</b> dans les commentaires (sûr à ${pct(pt.conf)}). Il reste environ <b>${pct(pt.part_restante)}</b> des buts d'un match à marquer.`;
@@ -923,7 +1211,7 @@ function majPanneau() {
   courbe();
 }
 function majFil() {
-  const pt = M.points[k], cache = $('suspense').checked;
+  const pt = M.points[k];
   $('ongletLu').setAttribute('aria-selected', vue === 'lu'); $('ongletVrai').setAttribute('aria-selected', vue === 'vrai');
   if (vue === 'lu') {
     $('fil').innerHTML = pt.buts.length ? pt.buts.map(b => {
@@ -939,7 +1227,6 @@ function majFil() {
     return;
   }
   if (!M.evenements) { $('fil').innerHTML = '<li><span class="min">—</span><div class="note">Ce match n\'est pas annoté par SoccerNet : on ne connaît que le score final.</div></li>'; return; }
-  if (cache) { $('fil').innerHTML = '<li><span class="min">—</span><div class="note">Mode suspense : le vrai déroulement est caché.</div></li>'; return; }
   const vus = EV.filter(x => 'BJRYX'.includes(x.code) && x.eq >= 0 && x.tau <= T && (lecture || x.tau < T || k === 11));
   const icone = x => x.code === 'B' ? '⚽' : x.code === 'X' ? '🔁' : `<span class="carton" style="background:${x.code === 'J' ? '#ffd54a' : '#e5202e'}"></span>`;
   const lib = {B: 'But', J: 'Carton jaune', R: 'Carton rouge', Y: 'Deuxième jaune, exclu', X: 'Changement'};
@@ -970,7 +1257,7 @@ function courbe() {
   D.points.forEach((p, i) => s += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="${i <= k ? '#f4f7f5' : '#b3c2ba'}">${p === 'Mi-temps' ? 'MT' : p}</text>`);
   const xt = xDuTemps(T, x);
   s += `<rect x="${xt}" y="${h}" width="${Math.max(0, W - d - xt)}" height="${H - h - b}" fill="rgba(0,0,0,.2)"/>`;
-  // vrais buts (sauf en mode suspense)
+  // vrais buts (matchs annotés)
   if (!modeLu()) EV.forEach(ev => {
     if (ev.code !== 'B' || ev.eq < 0 || ev.tau > T || (!lecture && ev.tau >= T && k !== 11)) return;
     const xx = xDuTemps(ev.tau, x);
@@ -1003,7 +1290,10 @@ function choisir() {
   $('cDom').textContent = M.dom.code; $('cExt').textContent = M.ext.code;
   $('kDom').innerHTML = `<i style="background:${M.dom.c1}"></i><i style="background:${M.dom.c2}"></i>`;
   $('kExt').innerHTML = `<i style="background:${M.ext.c1}"></i><i style="background:${M.ext.c2}"></i>`;
-  $('infoMatch').textContent = `${M.dom.nom} – ${M.ext.nom} · ${M.competition} · ${M.date}`;
+  document.documentElement.style.setProperty('--c-dom', C.ligne[0]);   // l'habillage prend les couleurs du match
+  document.documentElement.style.setProperty('--c-ext', C.ligne[1]);
+  construireStade();
+  ledNormal();
   $('legende').innerHTML = [[M.dom.nom, C.ligne[0]], ['Match nul', '#9aa5a0'], [M.ext.nom, C.ligne[1]]]
     .map(([n, c]) => `<span><span class="pastille" style="background:${c}"></span>${esc(n)}</span>`).join('');
   $('noteEcran').textContent = M.evenements ? 'Joueurs : illustration rejouant les actions annotées' : 'Match sans annotation : jeu illustratif, score réel connu à la fin';
@@ -1011,17 +1301,6 @@ function choisir() {
   aller(0);
 }
 function selectionner(m) { $('comp').value = m.competition + ' · ' + m.saison; remplir(); $('match').value = m.id; choisir(); }
-
-function fiabilite() {
-  const ev = D.evaluation, ei = D.evaluation_inedits;
-  $('repere').textContent = pct(D.repere_domicile ?? 0.49);
-  $('tabFiab').innerHTML = '<tr><th>Moment</th><th>Bon résultat</th><th>Log loss</th><th>Score final exact</th><th>Score courant exact</th><th>Bon résultat (matchs jamais annotés)</th></tr>' +
-    ev.map((e, i) => `<tr><td>${e.point}</td><td>${pct(e.bon_resultat)}</td><td>${e.log_loss.toFixed(3)}</td><td>${pct(e.score_final_exact)}</td>` +
-      `<td>${e.score_courant_exact == null ? '—' : pct(e.score_courant_exact)}</td><td>${pct(ei[i].bon_resultat)}</td></tr>`).join('');
-  $('noteFiab').textContent = `${D.nb_annotes} matchs annotés (validation croisée) et ${D.nb_inedits} matchs jamais annotés (test à part). ` +
-    'La log loss mesure la justesse des probabilités (plus bas = mieux). Avec ces effectifs, les pourcentages sont connus à ± 3 points (± 8 pour les matchs jamais annotés).' +
-    (D.comparaison_force ? ` Au coup d'envoi, la force des équipes vient d'un filtre de Kalman : ${pct(D.comparaison_force[0]['bon vainqueur (annotés)'])} de bons vainqueurs, contre ${pct(D.comparaison_force[1]['bon vainqueur (annotés)'])} avec un Elo classique.` : '');
-}
 
 function init() {
   const comps = [...new Set(D.matchs.map(m => m.competition + ' · ' + m.saison))].sort();
@@ -1036,20 +1315,21 @@ function init() {
   $('play').onclick = () => lecture ? arreter() : lancer();
   $('vitesse').onchange = () => vit = +$('vitesse').value;
   vit = +$('vitesse').value;
-  $('suspense').onchange = () => aller(k);
   $('ongletLu').onclick = () => { vue = 'lu'; majFil(); };
   $('ongletVrai').onclick = () => { vue = 'vrai'; majFil(); };
-  $('fiab').onclick = () => { $('modale').hidden = false; $('fermer').focus(); };
-  $('fermer').onclick = () => $('modale').hidden = true;
-  $('modale').onclick = e => { if (e.target.id === 'modale') $('modale').hidden = true; };
+  document.querySelectorAll('.ballon').forEach(b => {
+    b.innerHTML = ballon(b.dataset.page);
+    b.onclick = () => allerPage(+b.dataset.page);
+  });
+  $('versPage1').onclick = () => allerPage(1);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') $('modale').hidden = true;
     if (['SELECT', 'INPUT'].includes(e.target.tagName)) return;
+    if (e.key === '1' || e.key === '2') { allerPage(+e.key); return; }
+    if (pageCourante !== 1) return;
     if (e.key === 'ArrowRight') $('suiv').click();
     if (e.key === 'ArrowLeft') $('prec').click();
     if (e.key === ' ') { e.preventDefault(); $('play').click(); }
   });
-  fiabilite();
   // match d'ouverture : celui de l'adresse, sinon un match annoté typique (plusieurs buts, un carton, pronostic juste à la fin)
   const voulu = decodeURIComponent(location.hash.slice(1));
   const fini = m => m.points[11].prono;
@@ -1059,8 +1339,62 @@ function init() {
          && (m.evenements || []).some(x => x[2] === 'J'))
     || D.matchs[0];
   selectionner(depart);
+  if (voulu === 'projet') allerPage(2);
   if (/[?&]lecture=1/.test(location.search)) lancer();
   requestAnimationFrame(boucle);
+}
+
+/* ============================== Page 2 : le projet ============================== */
+let pageCourante = 1, projetRendu = false;
+// chiffres de la détection, mesurés par detection_buts.py (330 matchs annotés, validation croisée)
+const DETECTION = {fauxNaif: '15,9', faux: '0,45', precision: 0.82, rappel: 0.57, auc: '0,89'};
+const pct1 = v => fr1(v * 100) + ' %';
+
+function ballon(n) {
+  // ballon vu de face : un pentagone noir au centre (avec le numéro), cinq autres coupés par le bord
+  const p = (cx, cy, r, rot) => [0, 1, 2, 3, 4].map(i => { const a = (rot + i * 72) * Math.PI / 180;
+    return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`; }).join(' ');
+  const pt = (r, deg) => [r * Math.cos(deg * Math.PI / 180), r * Math.sin(deg * Math.PI / 180)].map(v => v.toFixed(1));
+  let s = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><defs><clipPath id="bord-${n}"><circle r="47"/></clipPath></defs>`;
+  s += `<circle r="47" fill="#f7f7f2"/><g clip-path="url(#bord-${n})" stroke="#1b1b1b" stroke-width="2.2" fill="#1b1b1b">`;
+  for (let i = 0; i < 5; i++) {
+    const a = -90 + i * 72, [x1, y1] = pt(23, a), [x2, y2] = pt(34, a), [x3, y3] = pt(42, a - 26), [x4, y4] = pt(42, a + 26);
+    s += `<path d="M${x1} ${y1}L${x2} ${y2}M${x3} ${y3}L${x2} ${y2}L${x4} ${y4}" fill="none"/>`;
+    const [cx, cy] = pt(49, a + 36);
+    s += `<polygon points="${p(+cx, +cy, 14, a + 36 + 180)}"/>`;
+  }
+  s += `</g><polygon points="${p(0, 0, 24, -90)}" fill="#1b1b1b"/><circle r="47" fill="none" stroke="#1b1b1b" stroke-width="2.5"/>`;
+  return s + `<text y="10" text-anchor="middle" font-size="29" font-weight="900" fill="#fff" font-family="system-ui,sans-serif">${n}</text></svg>`;
+}
+
+function allerPage(n) {
+  if (n === pageCourante) return;
+  pageCourante = n;
+  if (n === 2) { arreter(); cacherIncrustations(); rendreProjet(); }
+  $('page1').hidden = n !== 1; $('page2').hidden = n !== 2;
+  document.querySelectorAll('.ballon').forEach(b => b.setAttribute('aria-current', +b.dataset.page === n ? 'page' : 'false'));
+  window.scrollTo(0, 0);
+  try { history.replaceState(null, '', '#' + (n === 2 ? 'projet' : encodeURIComponent(M.id))); } catch (e) {}
+}
+
+function rendreProjet() {
+  if (projetRendu) return;
+  projetRendu = true;
+  const ev = D.evaluation, e0 = ev[0], eF = ev[ev.length - 1];
+  $('p2Chiffres').innerHTML = [
+    [`${DETECTION.fauxNaif} → ${DETECTION.faux}`, 'faux buts par match, de l’approche naïve à notre modèle'],
+    [pct(DETECTION.precision), 'des buts annoncés par le modèle sont de vrais buts'],
+    [pct1(e0.bon_resultat), 'de bons vainqueurs dès le coup d’envoi (force des équipes par Kalman)'],
+    [pct1(eF.bon_resultat), `de bons vainqueurs au coup de sifflet final (${pct(D.repere_domicile)} en pariant sur le domicile)`],
+    [pct1(eF.score_final_exact), 'de scores finaux exacts, lus dans les seuls commentaires'],
+  ].map(([b, t]) => `<div class="chiffre"><b>${esc(b)}</b><span>${esc(t)}</span></div>`).join('');
+  const lignes = [0, 5, 10, 11].map(i => ev[i]);
+  $('p2Resultats').innerHTML = `<table><tr><th>Mesure</th><th>Valeur</th></tr>
+    <tr><td>Faux buts par match (approche naïve → modèle)</td><td>${DETECTION.fauxNaif} → ${DETECTION.faux}</td></tr>
+    <tr><td>Précision / rappel de la détection des buts</td><td>${pct(DETECTION.precision)} / ${pct(DETECTION.rappel)}</td></tr>
+    <tr><td>Sens des mentions (AUC, règles à la main : 0,55)</td><td>${DETECTION.auc}</td></tr>
+    ${lignes.map(e => `<tr><td>Bon vainqueur à ${e.point === 'Mi-temps' ? 'la mi-temps' : (e.point === 'Fin' ? 'la fin' : e.point)} (log loss)</td><td>${pct1(e.bon_resultat)} (${e.log_loss.toFixed(2).replace('.', ',')})</td></tr>`).join('')}
+    <tr><td>Score final exact au coup de sifflet</td><td>${pct1(eF.score_final_exact)}</td></tr></table>`;
 }
 
 if (D) init();

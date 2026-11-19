@@ -22,19 +22,27 @@ open match_en_direct.html
 
 ## La page `match_en_direct.html`
 
-- **L'écran** : un terrain vu d'en haut où 22 petits joueurs rejouent le match. Ils suivent les actions annotées
+- **L'habillage** : un soir de match télévisé. Stade de nuit et projecteurs, typographie condensée façon
+  habillage télé, couleurs des deux équipes. En haut, trois gros onglets : compétition, match, « Match au hasard ».
+- **Le stade** : un terrain vu d'en haut où 22 petits joueurs rejouent le match. Ils suivent les actions annotées
   par SoccerNet au bon moment (buts, tirs, corners, touches, penalties, cartons). « BUT ! » s'affiche quand le
   ballon entre, l'arbitre sort les cartons, un joueur exclu quitte le terrain. Les positions sont inventées :
-  c'est une illustration.
+  c'est une illustration. Autour du terrain :
+  - derrière chaque but, un tifo, une mosaïque de cartons aux couleurs du club avec son nom (domicile à gauche,
+    visiteurs à droite) ;
+  - le long des lignes de touche, la foule en lumières floues aux couleurs des clubs, avec des flashs de téléphones ;
+  - des panneaux LED qui défilent le long des lignes de touche.
+
+  À chaque but, chez l'équipe qui marque : une vague traverse le tifo, les fumigènes s'allument, la foule
+  s'illumine, les flashs crépitent et les panneaux affichent « BUT ! ».
 - **Le tableau d'affichage**, façon télé : codes des équipes, couleurs des maillots, chrono qui tourne, temps
   additionnel, cartons rouges. Le gros score est **celui que le modèle lit** dans les commentaires (il clignote
   quand le modèle change d'avis) ; le vrai score est en petit dessous. Les événements (but, carton, changement)
   s'affichent quelques secondes.
 - **Le bandeau** du bas de l'écran : à chaque point de contrôle où le modèle change d'avis, le score qu'il lit et
   la phrase qui l'a convaincu.
-- **Sous l'écran** : la frise 0' · 10' · … · 90' · Fin, ▶ pour regarder le match (vitesse ×1, ×2, ×4), flèches du
-  clavier, et le « mode suspense ». Dans ce mode, le vrai déroulement est caché et le terrain rejoue le match tel
-  que le modèle le lit.
+- **Sous l'écran**, un panneau LED : la frise 0' · 10' · … · 90' · Fin, ▶ pour regarder le match (vitesse ×1, ×2,
+  ×4) et les flèches du clavier. Pour un match sans annotation, le terrain rejoue le match tel que le modèle le lit.
 - **Le panneau d'analyse** :
   - l'évolution des chances de victoire, avec les vrais buts marqués sur la courbe ;
   - le pronostic du score final contre le vrai score ;
@@ -42,8 +50,12 @@ open match_en_direct.html
     l'annonce et le score cité qui l'a confirmé (« Bayern are leading 1-0 »). « Le vrai match » donne les vrais
     buts, cartons et changements.
 
+- **La page 2** (le ballon « 2 » sur le côté de l'écran, ou la touche 2) : le projet expliqué. On y trouve la
+  problématique, les données, ce que fait le programme, les modèles de langue (BERT), les **méthodes** (pourquoi
+  chacune, et comment elle marche), les résultats et les limites.
+
 Fichier autonome : il s'ouvre sans connexion. On peut viser un match précis :
-`match_en_direct.html#<dossier du match>`.
+`match_en_direct.html#<dossier du match>`, ou la page 2 avec `match_en_direct.html#projet`.
 
 ## Données
 

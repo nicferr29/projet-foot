@@ -367,7 +367,8 @@ def main():
     donnees_page = {"points": POINTS, "evaluation": ev, "evaluation_inedits": ev_inedits,
                     "repere_domicile": float((infos.loc[annotes, "resultat"] == 1).mean()),
                     "nb_annotes": len(annotes), "nb_inedits": len(inedits),
-                    "comparaison_force": comp.reset_index().to_dict(orient="records"), "matchs": matchs_json}
+                    "comparaison_force": comp.reset_index().to_dict(orient="records"),
+                    "matchs": matchs_json}
     with open(FICHIER_JSON, "w", encoding="utf-8") as f:
         json.dump(donnees_page, f, ensure_ascii=False)
     construire_page(donnees_page)
